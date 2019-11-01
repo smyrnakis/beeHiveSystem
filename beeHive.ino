@@ -4,7 +4,7 @@
 #include <ESP8266WebServer.h>
 #include <WiFiManager.h>
 #include <WiFiUdp.h>
-#include <ArduinoOTA.h>
+// #include <ArduinoOTA.h>
 
 #include <DHT.h>
 #include <HX711.h>
@@ -37,6 +37,9 @@
 const char* thingSpeakServer  = "api.thingspeak.com"; 	// "184.106.153.149"
 char apiKey[] = THINGSP_WR_APIKEY;						// API key w/ write access
 
+char defaultSSID[] = WIFI_DEFAULT_SSID;
+char defaultPASS[] = WIFI_DEFAULT_PASS;
+
 float temperature;
 float humidity;
 float weight;
@@ -56,8 +59,9 @@ string beeHiveMessage; 									// The variable beeHiveMessage will inform the a
 
 
 // ~~~ WiFi data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-char ssid[]              = NICK_HOME_SSID;
-char password[]          = NICK_HOME_PASS;
+// char ssid[]              = TOLIS_MOBILE_SSID;
+// char password[]          = TOLIS_MOBILE_PASS;
+
 
 
 // ~~~ Initialising ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -80,7 +84,34 @@ void setup() {
 
 	Serial.begin(115200);			// starting serial
 	delay(100);
+
+	WiFiManager wifiManager;
+	//wifiManager.resetSettings();
+	wifiManager.setConfigPortalTimeout(180);  // 180 sec timeout for WiFi configuration
+	wifiManager.autoConnect(defaultSSID, defaultPASS);
+
+	Serial.println("Connected to WiFi.");
+	Serial.print("IP: ");
+	localIPaddress = (WiFi.localIP()).toString();
+	Serial.println(localIPaddress);
+
+	server.on("/", handle_OnConnect);
+	server.onNotFound(handle_NotFound);
 	
+	server.begin();
+	Serial.println("HTTP server starter on port 80.");
+
+	delay(5000);
+	if (WiFi.status() != WL_CONNECTED) {
+		Serial.println("Changing to GPRS mode ...");
+		gprsMode = true;
+	}
+
+	// // handle OTA updates
+	// handleOTA();
+
+	delay(400);
+
 	dht.begin();					// starting DHT sensor
 	delay(100);
 	
@@ -93,71 +124,47 @@ void setup() {
 	weight = 0;
 
 	numOf1Kdelay = 0;				// timmer for minutes delay
-	
-	if (!gprsMode)
-	{
-		Serial.println();
-		Serial.println();
-		Serial.print("Connecting to ");
-		Serial.print(ssid);
-		Serial.print(" ");
-
-		WiFi.begin(ssid, password);
-
-		while (WiFi.status() != WL_CONNECTED) 
-		{
-			delay(500);
-			Serial.print(".");
-		}
-		Serial.println();
-		Serial.println("WiFi connected.");
-	} else
-	{
-		// GPRS mode
-		// Actually, no need to start anything! The connection is 
-		// starting just before transmitting data (inside the function)
-	}
 }
 
 
 // ~~~ Main loop ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void loop() {
 
-	// checking if WiFi OK (when in WiFi mode)
-	if (!gprsMode)
-	{
-		if (WiFi.status() != WL_CONNECTED)
-		{
-			digitalWrite(RED_LED, HIGH);
-			Serial.println();
-			Serial.println();
-			Serial.print("WiFi disconnected! Reconnecting ");
-			WiFi.begin(ssid, password);
+	// // checking if WiFi OK (when in WiFi mode)
+	// if (!gprsMode)
+	// {
+	// 	if (WiFi.status() != WL_CONNECTED)
+	// 	{
+	// 		digitalWrite(RED_LED, HIGH);
+	// 		Serial.println();
+	// 		Serial.println();
+	// 		Serial.print("WiFi disconnected! Reconnecting ");
+	// 		WiFi.begin(ssid, password);
 
-			while (WiFi.status() != WL_CONNECTED) 
-			{
-				delay(500);
-				Serial.print(".");
-			}
-			Serial.println();
-			Serial.println("WiFi connected.");
-			digitalWrite(RED_LED, LOW);
-		}
-	}
-	// checking if Mobile signal OK (when in GPRS mode)
-	else
-	{
-		while (FALSE)				// <?><?><?><?><?><?><?><?><?><?><?><?><?><?> TO FIX
-		{
-			digitalWrite(RED_LED, HIGH);
-			Serial.println();
-			Serial.println();
-			Serial.print("No mobile signal!");
-			Serial.println();
-			Serial.println();
-			digitalWrite(RED_LED, LOW);
-		}
-	}
+	// 		while (WiFi.status() != WL_CONNECTED) 
+	// 		{
+	// 			delay(500);
+	// 			Serial.print(".");
+	// 		}
+	// 		Serial.println();
+	// 		Serial.println("WiFi connected.");
+	// 		digitalWrite(RED_LED, LOW);
+	// 	}
+	// }
+	// // checking if Mobile signal OK (when in GPRS mode)
+	// else
+	// {
+	// 	while (FALSE)				// <?><?><?><?><?><?><?><?><?><?><?><?><?><?> TO FIX
+	// 	{
+	// 		digitalWrite(RED_LED, HIGH);
+	// 		Serial.println();
+	// 		Serial.println();
+	// 		Serial.print("No mobile signal!");
+	// 		Serial.println();
+	// 		Serial.println();
+	// 		digitalWrite(RED_LED, LOW);
+	// 	}
+	// }
 
 	// checking for SMS
 	readSMS();
