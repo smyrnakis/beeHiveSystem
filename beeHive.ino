@@ -1,29 +1,13 @@
-// ~ INPUTS ~
-//  P? --> SWITCH gprsMode
-// ~~~~~~~~~~~
-
-// ~ OUTPUTS ~
-//  P4 --> LED yellow
-//  P5 --> LED red
-//  P6 --> LED green
-// ~~~~~~~~~~~
-
-// ~ VARIOUS ~
-//  P2 --> DHT sensor
-//  P7 --> GSM Tx
-//  P8 --> GSM Rx
-
-//  P12 --> HX711 clk
-//  P13 --> HX711 dat 
-// ~~~~~~~~~~~
-
-// http://beehivesystem.ddns.net
+#include <Arduino.h>
+#include <ESP8266WiFi.h>
+#include <DNSServer.h>
+#include <ESP8266WebServer.h>
+#include <WiFiManager.h>
+#include <WiFiUdp.h>
+#include <ArduinoOTA.h>
 
 #include <DHT.h>
-#include <ESP8266WiFi.h>
-
 #include <HX711.h>
-
 #include <GPRS_Shield_Arduino.h>
 #include <sim900.h>
 
@@ -34,22 +18,24 @@
 
 
 // ~~~ PIN declaration ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#define YELLOWLED 4
-#define REDLED 5
-#define GREENLED 6
+#define PCBLED 16		// D0 / LED_BUILTIN
+#define GREEN_LED 4		// D2	old: 6 / CLK
+#define BLUE_LED 0		// D3 	old: 4 D2
+#define RED_LED 14		// D5	old: 5 D1
+#define ESPLED 2 		// D4
 
-#define DHTPIN 2
+// #define ANLG_IN A0
+#define DHTPIN 5 		// D1	old: 2
+#define GSM_TX 7		// SD0	
+#define GSM_RX 8		// SD1
 
-#define GSM_TX 7
-#define GSM_RX 8
-
-#define HX711_CLK 12
-#define HX711_DAT 13
+#define HX711_CLK 12	// D6
+#define HX711_DAT 13	// D7
 
 
 // ~~~ Variables - constants ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 const char* thingSpeakServer  = "api.thingspeak.com"; 	// "184.106.153.149"
-char apiKey[] = THINGSP_WR_APIKEY;						// API key w/ Write access
+char apiKey[] = THINGSP_WR_APIKEY;						// API key w/ write access
 
 float temperature;
 float humidity;
@@ -84,13 +70,13 @@ WiFiClient client;
 void setup() {
 	gprsMode = false;				// true: GPRS , false: WiFi
 
-	pinMode(YELLOWLED, OUTPUT)		// setting LED pins
-	pinMode(REDLED, OUTPUT);
-	pinMode(GREENLED, OUTPUT);
+	pinMode(BLUE_LED, OUTPUT)		// setting LED pins
+	pinMode(RED_LED, OUTPUT);
+	pinMode(GREEN_LED, OUTPUT);
 
-	digitalWrite(YELLOWLED, LOW);	// turning LEDs OFF
-	digitalWrite(REDLED, LOW);
-	digitalWrite(GREENLED, LOW);
+	digitalWrite(BLUE_LED, LOW);	// turning LEDs OFF
+	digitalWrite(RED_LED, LOW);
+	digitalWrite(GREEN_LED, LOW);
 
 	Serial.begin(115200);			// starting serial
 	delay(100);
@@ -142,7 +128,7 @@ void loop() {
 	{
 		if (WiFi.status() != WL_CONNECTED)
 		{
-			digitalWrite(REDLED, HIGH);
+			digitalWrite(RED_LED, HIGH);
 			Serial.println();
 			Serial.println();
 			Serial.print("WiFi disconnected! Reconnecting ");
@@ -155,7 +141,7 @@ void loop() {
 			}
 			Serial.println();
 			Serial.println("WiFi connected.");
-			digitalWrite(REDLED, LOW);
+			digitalWrite(RED_LED, LOW);
 		}
 	}
 	// checking if Mobile signal OK (when in GPRS mode)
@@ -163,13 +149,13 @@ void loop() {
 	{
 		while (FALSE)				// <?><?><?><?><?><?><?><?><?><?><?><?><?><?> TO FIX
 		{
-			digitalWrite(REDLED, HIGH);
+			digitalWrite(RED_LED, HIGH);
 			Serial.println();
 			Serial.println();
 			Serial.print("No mobile signal!");
 			Serial.println();
 			Serial.println();
-			digitalWrite(REDLED, LOW);
+			digitalWrite(RED_LED, LOW);
 		}
 	}
 
@@ -189,10 +175,10 @@ void loop() {
 	// Counting auto-update interval time
 	for (short i = 0; i < numOf1Kdelay; i++)
 	{
-		digitalWrite(GREENLED, HIGH);
+		digitalWrite(GREEN_LED, HIGH);
 		delay(1000);
 		readSMS();		// in case of new SMS, auto-update can be updated
-		digitalWrite(GREENLED, LOW);
+		digitalWrite(GREEN_LED, LOW);
 	}
 
 
@@ -202,7 +188,7 @@ void loop() {
 		// get sensor data
 		getMeasurements();
 		
-		digitalWrite(YELLOWLED, HIGH);
+		digitalWrite(BLUE_LED, HIGH);
 		if (!gprsMode)	// Sending data using WiFi
 		{
 			Send2ThingSpeakWiFi();
@@ -210,7 +196,7 @@ void loop() {
 		{
 			Send2ThingSpeakGPRS();
 		}
-		digitalWrite(YELLOWLED, LOW);
+		digitalWrite(BLUE_LED, LOW);
 
 		// Resetting interval when upload int was 1
 		if (numOf1Kdelay == 1)
@@ -221,9 +207,9 @@ void loop() {
 	// No auto-update - check for SMS every 30 sec
 	else
 	{
-		digitalWrite(GREENLED, HIGH);
+		digitalWrite(GREEN_LED, HIGH);
 		delay(1000);
-		digitalWrite(GREENLED, LOW);
+		digitalWrite(GREEN_LED, LOW);
 		delay(29000);
 		readSMS();
 	}
@@ -308,9 +294,9 @@ void readSMS() {
 			Serial.println("Reading sensors data ...");
 			getMeasurements()
 			Serial.println("Sending SMS message ...");
-			digitalWrite(YELLOWLED, HIGH);
+			digitalWrite(BLUE_LED, HIGH);
 			gprs.sendSMS(phone,beeHiveMessage);
-			digitalWrite(YELLOWLED, LOW);
+			digitalWrite(BLUE_LED, LOW);
 		}
 		else if (strstr(message, smsUpload) != NULL) 
 		{
