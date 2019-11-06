@@ -1,10 +1,9 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
-#include <DNSServer.h>
-#include <ESP8266WebServer.h>
+// #include <DNSServer.h>
+// #include <ESP8266WebServer.h>
 #include <WiFiManager.h>
-#include <WiFiUdp.h>
-// #include <ArduinoOTA.h>
+// #include <WiFiUdp.h>
 
 #include <DHT.h>
 #include <HX711.h>
@@ -19,10 +18,10 @@
 
 // ~~~ PIN declaration ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #define PCBLED 16		// D0 / LED_BUILTIN
+#define ESPLED 2 		// D4
 #define GREEN_LED 4		// D2	old: 6 / CLK
 #define BLUE_LED 0		// D3 	old: 4 D2
 #define RED_LED 14		// D5	old: 5 D1
-#define ESPLED 2 		// D4
 
 // #define ANLG_IN A0
 #define DHTPIN 5 		// D1	old: 2
@@ -34,7 +33,7 @@
 
 
 // ~~~ Variables - constants ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-const char* thingSpeakServer  = "api.thingspeak.com"; 	// "184.106.153.149"
+const char* thingSpeakServer  = "api.thingspeak.com"; 	// 184.106.153.149
 char apiKey[] = THINGSP_WR_APIKEY;						// API key w/ write access
 
 char defaultSSID[] = WIFI_DEFAULT_SSID;
@@ -44,7 +43,9 @@ float temperature;
 float humidity;
 float weight;
 
-boolean gprsMode;  										// true: GPRS , false: WiFi - to be set using a switch
+int numOf1Kdelay = 0;
+
+bool gprsMode = false;  								// true: GPRS , false: WiFi
 
 const char* smsReport = "report";						// --> reply back with SMS
 const char* smsUpload = "upload";						// --> upload instantly - once
@@ -58,27 +59,32 @@ string beeHiveMessage; 									// The variable beeHiveMessage will inform the a
 														// is going on with the weight, temperature and humidity
 
 
-// ~~~ WiFi data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// ~~~ WiFi data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~	// NOT NEEDED WITH WiFi Manager lib
 // char ssid[]              = TOLIS_MOBILE_SSID;
 // char password[]          = TOLIS_MOBILE_PASS;
 
 
 
 // ~~~ Initialising ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// DHT dht(DHTPIN, DHT11);
 DHT dht(DHTPIN, DHT11,15);
 HX711 scale(HX711_DAT,HX711_CLK);
+// ESP8266WebServer server(80);
 WiFiClient client;
 
 
 // ~~~ Initializing ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void setup() {
-	gprsMode = false;				// true: GPRS , false: WiFi
-
-	pinMode(BLUE_LED, OUTPUT)		// setting LED pins
+	// pinMode(DHTPIN, INPUT);
+	pinMode(PCBLED, OUTPUT);		// setting I/O
+	pinMode(ESPLED, OUTPUT);
+	pinMode(BLUE_LED, OUTPUT)
 	pinMode(RED_LED, OUTPUT);
 	pinMode(GREEN_LED, OUTPUT);
 
-	digitalWrite(BLUE_LED, LOW);	// turning LEDs OFF
+	digitalWrite(PCBLED, HIGH);		// turning LEDs OFF
+  	digitalWrite(ESPLED, HIGH);
+	digitalWrite(BLUE_LED, LOW);
 	digitalWrite(RED_LED, LOW);
 	digitalWrite(GREEN_LED, LOW);
 
@@ -87,28 +93,26 @@ void setup() {
 
 	WiFiManager wifiManager;
 	//wifiManager.resetSettings();
-	wifiManager.setConfigPortalTimeout(180);  // 180 sec timeout for WiFi configuration
+	wifiManager.setConfigPortalTimeout(120);  // 120 sec timeout for WiFi configuration
 	wifiManager.autoConnect(defaultSSID, defaultPASS);
 
 	Serial.println("Connected to WiFi.");
 	Serial.print("IP: ");
-	localIPaddress = (WiFi.localIP()).toString();
-	Serial.println(localIPaddress);
+	Serial.println(WiFi.localIP());
+	Serial.println("\n\r");
 
-	server.on("/", handle_OnConnect);
-	server.onNotFound(handle_NotFound);
+	// server.on("/", handle_OnConnect);
+	// server.on("/about", handle_OnConnectAbout);
+	// server.onNotFound(handle_NotFound);
 	
-	server.begin();
-	Serial.println("HTTP server starter on port 80.");
+	// server.begin();
+	// Serial.println("HTTP server starter on port 80.");
 
 	delay(5000);
 	if (WiFi.status() != WL_CONNECTED) {
-		Serial.println("Changing to GPRS mode ...");
+		Serial.println("No WiFi. Enabling GPRS mode ...");
 		gprsMode = true;
 	}
-
-	// // handle OTA updates
-	// handleOTA();
 
 	delay(400);
 
