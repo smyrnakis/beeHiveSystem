@@ -134,42 +134,6 @@ void setup() {
 // ~~~ Main loop ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void loop() {
 
-	// // checking if WiFi OK (when in WiFi mode)
-	// if (!gprsMode)
-	// {
-	// 	if (WiFi.status() != WL_CONNECTED)
-	// 	{
-	// 		digitalWrite(RED_LED, HIGH);
-	// 		Serial.println();
-	// 		Serial.println();
-	// 		Serial.print("WiFi disconnected! Reconnecting ");
-	// 		WiFi.begin(ssid, password);
-
-	// 		while (WiFi.status() != WL_CONNECTED) 
-	// 		{
-	// 			delay(500);
-	// 			Serial.print(".");
-	// 		}
-	// 		Serial.println();
-	// 		Serial.println("WiFi connected.");
-	// 		digitalWrite(RED_LED, LOW);
-	// 	}
-	// }
-	// // checking if Mobile signal OK (when in GPRS mode)
-	// else
-	// {
-	// 	while (FALSE)				// <?><?><?><?><?><?><?><?><?><?><?><?><?><?> TO FIX
-	// 	{
-	// 		digitalWrite(RED_LED, HIGH);
-	// 		Serial.println();
-	// 		Serial.println();
-	// 		Serial.print("No mobile signal!");
-	// 		Serial.println();
-	// 		Serial.println();
-	// 		digitalWrite(RED_LED, LOW);
-	// 	}
-	// }
-
 	// checking for SMS
 	readSMS();
 
@@ -227,7 +191,7 @@ void loop() {
 }
 
 
-// ~~~ Getting measurements ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// ~~~ Getting sensor data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void getMeasurements() {
 	// reset values
 	temperature = 0;
@@ -248,49 +212,55 @@ void getMeasurements() {
 	if (isnan(temperature))
 	{
 		Serial.println("Failed to read temperature sensor!");
-		temperature = -10;
+		temperature = -100;
 	}
 	else
 	{
 		Serial.println("Temperature: ");
 		Serial.print(temperature);
 		Serial.print(" °C");
-		beeHiveMessage += "Temp: " ; beeHiveMessage += String(temperature) ; beeHiveMessage += " °C\r\n" ;
+		beeHiveMessage += "Temp: ";
+		beeHiveMessage += String(temperature);
+		beeHiveMessage += " °C\r\n" ;
 	}
 
 	if (isnan(humidity))
 	{
 		Serial.println("Failed to read humidity sensor!");
-		humidity = -10;
+		humidity = -100;
 	}
 	else
 	{
 		Serial.println("Humidity: ");
 		Serial.print(humidity);
 		Serial.print(" %");
-		beeHiveMessage += "Hum: " ; beeHiveMessage += String(humidity) ; beeHiveMessage += " %\r\n" ;
+		beeHiveMessage += "Hum: ";
+		beeHiveMessage += String(humidity);
+		beeHiveMessage += " %\r\n";
 	}
 
 	if (isnan(weight))
 	{
 		Serial.println("Failed to read weight sensor!");
-		weight = -10;
+		weight = -100;
 	}
 	else
 	{
 		Serial.println("Weight: ");
 		Serial.print(weight);
 		Serial.print(" kg");
-		beeHiveMessage += "Weight: " ; beeHiveMessage += String(weight) ; beeHiveMessage += " kg\r\n" ;
+		beeHiveMessage += "Weight: ";
+		beeHiveMessage += String(weight);
+		beeHiveMessage += " kg\r\n";
 	}
 }
 
 
 // ~~~ Checking / Reading SMS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void readSMS() {
-    messageIndex = gprs.isSMSunread();
+    short messageIndex = gprs.isSMSunread();
 
-    Serial.print("Just checked for unread SMS "); 
+    Serial.print("Just checked for unread SMS: "); 
     Serial.println(messageIndex);
     
 	// While there is at least one UNREAD SMS, we will read it and delete it immediatly
