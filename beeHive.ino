@@ -39,17 +39,18 @@ char apiKey[] = THINGSP_WR_APIKEY;						// API key w/ write access
 char defaultSSID[] = WIFI_DEFAULT_SSID;
 char defaultPASS[] = WIFI_DEFAULT_PASS;
 
-float temperature;
-float humidity;
-float weight;
+float temperature = 0;
+float humidity = 0;
+float weight = 0;
 
-int numOf1Kdelay = 0;
+unsigned long previousMillis = 0;
+int smsContent = 0;
 
 bool gprsMode = false;  								// true: GPRS , false: WiFi
 
 const char* smsReport = "report";						// --> reply back with SMS
 const char* smsUpload = "upload";						// --> upload instantly - once
-const char* smsUpload15 = "auto15";						// --> upload every 15 minutes
+const char* smsUpload30 = "auto30";						// --> upload every 15 minutes
 const char* smsUpload45 = "auto45";						// --> upload every 45 minutes
 const char* smsUpload90 = "auto90";						// --> upload every 90 minutes
 const char* smsUpload120 = "auto120";					// --> upload every 120 minutes
@@ -119,15 +120,9 @@ void setup() {
 	dht.begin();					// starting DHT sensor
 	delay(100);
 	
-	scale.set_scale(-101800);		// starting DHT chip
+	scale.set_scale(-101800);		// starting HX711 chip
 	scale.tare();
 	delay(100);
-
-	temperature = 0;
-	humidity = 0;
-	weight = 0;
-
-	numOf1Kdelay = 0;				// timmer for minutes delay
 }
 
 
@@ -135,8 +130,46 @@ void setup() {
 void loop() {
 
 	// checking for SMS
-	readSMS();
+	smsContent = readSMS();
+	bool smsReplyOK = false;
 
+	switch (smsContent) {
+		case -2:							// Invalid SMS content
+			smsReplyOK = false;
+		break;
+		case -1:							// No unread SMS
+			;
+		break;
+		case 0:								// Auto upload canceled
+			// smsReplyOK = true;
+		break;
+		case 1:								// Upload data once
+			smsReplyOK = true;
+		break;
+		case 30:							// Upload every 30 seconds
+			smsReplyOK = true;
+		break;
+		case 45:							// Upload every 45 seconds
+			smsReplyOK = true;
+		break;
+		case 90:							// Upload every 90 seconds
+			smsReplyOK = true;
+		break;
+		case 120:							// Upload every 120 seconds
+			smsReplyOK = true;
+		break;
+		case 1000:							// Reply with SMS
+			Serial.println("Sending SMS message ...");
+
+			getMeasurements()
+			digitalWrite(BLUE_LED, HIGH);
+			gprs.sendSMS(phone,beeHiveMessage);
+			digitalWrite(BLUE_LED, LOW);
+		break;
+		default:							// Invalid reply
+			smsReplyOK = false;
+		break;
+	}
 
 	/*  numOf1Kdelay :
 		~~~~~~~~~~~~~~ update frequency can be 15 / 45 / 90 / 120 minutes ~~~~~~~~~~~~~~
@@ -257,80 +290,78 @@ void getMeasurements() {
 
 
 // ~~~ Checking / Reading SMS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-void readSMS() {
+int readSMS() {
     short messageIndex = gprs.isSMSunread();
+	// String message = "";
+	// int MESSAGE_LENGTH = 0;
+	// int phone = 0;
+	// String datetime = "";
 
-    Serial.print("Just checked for unread SMS: "); 
+    Serial.print("Checked for unread SMS: "); 
     Serial.println(messageIndex);
     
-	// While there is at least one UNREAD SMS, we will read it and delete it immediatly
-	while (messageIndex > 0)
-	{
-		//Lets read the SMS
+	// At least one unread SMS
+	while (messageIndex > 0) {
+
+		// Reading SMS
 		gprs.readSMS(messageIndex, message, MESSAGE_LENGTH, phone, datetime);
 
-		// If the substring is: smsReport OR smsUpload* 8 = 0 15 45 90 120
-		if (strstr(message, smsReport) != NULL)
-		{
-			Serial.println("Reading sensors data ...");
-			getMeasurements()
-			Serial.println("Sending SMS message ...");
-			digitalWrite(BLUE_LED, HIGH);
-			gprs.sendSMS(phone,beeHiveMessage);
-			digitalWrite(BLUE_LED, LOW);
-		}
-		else if (strstr(message, smsUpload) != NULL) 
-		{
-			numOf1Kdelay = 1;		// Upload data just once
-			Serial.println("Uploading to ThingSpeak (one time) ...");
-		}
-		else if (strstr(message, smsUpload15) != NULL) 
-		{
-			numOf1Kdelay = 900; 	// 900 x 1K ms_delay = 15'
-			Serial.println("Uploading to ThingSpeak every 15 minutes ...");
-		}
-		else if (strstr(message, smsUpload45) != NULL) 
-		{
-			numOf1Kdelay = 2700; 	// 2700 x 1K ms_delay = 45'
-			Serial.println("Uploading to ThingSpeak every 45 minutes ...");
-		}
-		else if (strstr(message, smsUpload90) != NULL) 
-		{
-			numOf1Kdelay = 5400; 	// 5400 x 1K ms_delay = 90'
-			Serial.println("Uploading to ThingSpeak every 90 minutes ...");
-		}
-		else if (strstr(message, smsUpload120) != NULL) 
-		{
-			numOf1Kdelay = 7200; 	// 7200 x 1K ms_delay = 120'
-			Serial.println("Uploading to ThingSpeak every 120 minutes ...");
-		}
-		else if (strstr(message, smsUploadCancel) != NULL) 
-		{
-			numOf1Kdelay = 0; 		// canceling auto-update
-			Serial.println("Auto upload canceled.");
-		}
-		else
-		{
-			//If there isn't any known word (or even a known phone number) in the received message, we won't answer!        
-			Serial.print("Invalid SMS content \r\n");
-			numOf1Kdelay = 0;		// Resetting / stopping upload interval
-		}
-
-		//In order not to full SIM Memory, it's better to delete it
-		gprs.deleteSMS(messageIndex);
+		// Print SMS data
 		Serial.print("From number: ");
 		Serial.println(phone);  
 		Serial.print("Message Index: ");
 		Serial.println(messageIndex);        
 		Serial.print("Recieved Message: ");
     	Serial.println(message);
+		Serial.print("Timestamp: ");
+    	Serial.println(datetime);
+
+		// If the substring is: smsReport OR smsUpload* [Cancel 30 45 90 120]
+		if (strstr(message, smsReport) != NULL) {
+			return 1000;
+		}
+		else if (strstr(message, smsUpload) != NULL) {
+			return 1;
+		}
+		else if (strstr(message, smsUpload30) != NULL) {
+			Serial.println("Uploading to ThingSpeak every 30 seconds ...");
+			return 30;
+		}
+		else if (strstr(message, smsUpload45) != NULL) 
+		{
+			Serial.println("Uploading to ThingSpeak every 45 seconds ...");
+			return 45;
+		}
+		else if (strstr(message, smsUpload90) != NULL) 
+		{
+			Serial.println("Uploading to ThingSpeak every 90 seconds ...");
+			return 90;
+		}
+		else if (strstr(message, smsUpload120) != NULL) 
+		{
+			Serial.println("Uploading to ThingSpeak every 120 seconds ...");
+			return 120;
+		}
+		else if (strstr(message, smsUploadCancel) != NULL) 
+		{
+			Serial.println("Uploading to ThingSpeak canceled");
+			return 0;
+		}
+		else
+		{
+			Serial.println("Invalid SMS text.");
+			return -2;
+		}
+
+		// Deleting SMS
+		gprs.deleteSMS(messageIndex);
 
     	// messageIndex = gprs.isSMSunread();					// <?><?><?><?><?><?><?<>?><?><?> DO I NEED TO CHECK AGAIN?
     	// Serial.println("Just checked again for unread SMS"); 
 	}
 	else {
-		Serial.println("No unread SMS."); 
-		numOf1Kdelay = 0;		// Resetting / stopping upload interval
+		// Serial.println("No unread SMS found.");
+		return -1;
 	}
 }
 
