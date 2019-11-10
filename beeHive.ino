@@ -11,7 +11,7 @@
 #include <sim900.h>
 
 #include <SoftwareSerial.h>
-#include <Wire.h>
+// #include <Wire.h>
 
 #include "secrets.h"
 
@@ -19,20 +19,22 @@
 // ~~~ PIN declaration ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #define PCBLED 16		// D0 / LED_BUILTIN
 #define ESPLED 2 		// D4
-#define GREEN_LED 4		// D2	old: 6 / CLK
-#define BLUE_LED 0		// D3 	old: 4 D2
-#define RED_LED 14		// D5	old: 5 D1
 
 // #define ANLG_IN A0
 #define DHTPIN 5 		// D1	old: 2
-#define GSM_TX 7		// SD0	
-#define GSM_RX 8		// SD1
+// #define GSM_TX 7		// SD0
+// #define GSM_RX 8		// SD1
 
 #define HX711_CLK 12	// D6
 #define HX711_DAT 13	// D7
 
+#define PIN_TX 7		// SD0	// Software serial for SIM900 communication
+#define PIN_RX 8		// SD1
+
 
 // ~~~ Variables - constants ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#define BAUDRATE 9600	// 115200
+
 const char* thingSpeakServer  = "api.thingspeak.com"; 	// 184.106.153.149
 char apiKey[] = THINGSP_WR_APIKEY;						// API key w/ write access
 
@@ -51,13 +53,16 @@ const unsigned int seconds45  = 45000;
 const unsigned int seconds90  = 90000;
 const unsigned int seconds120 = 120000;
 
-int SMS_command 		= 0;
-int SMS_phone 			= 0;
-int SMS_messageLength 	= 0;
-String SMS_message 		= "";
-String SMS_datetime 	= "";
+int SMS_command = 0;				// After incoming SMS message
 
-bool gprsMode = false;  								// true: GPRS , false: WiFi
+int SMS_phone[16];
+char SMS_datetime[24];
+#define MESSAGE_LENGTH 160			// SMS charachter limit		// int SMS_messageLength = 160;
+char SMS_message[MESSAGE_LENGTH];	// Incoming SMS
+// int messageIndex = 0;			// Defined in the readSMS() func
+
+bool gprsMode 		= false;		// True if no WiFi connection
+bool printInSerial 	= true;			// Printing in HW serial
 
 const char* smsReport		= "report";					// --> reply back with SMS
 const char* smsUpload 		= "upload";					// --> upload instantly - once
@@ -67,8 +72,7 @@ const char* smsUpload90 	= "auto90";					// --> upload every 90 seconds
 const char* smsUpload120 	= "auto120";				// --> upload every 120 seconds
 const char* smsUploadCancel = "autocancel";				// --> cancel auto upload
 
-string beeHiveMessage; 									// The variable beeHiveMessage will inform the apiarist what
-														// is going on with the weight, temperature and humidity
+char beeHiveMessage; 									// Contents of outgoing SMS message
 
 
 // ~~~ WiFi data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~	// NOT NEEDED WITH WiFi Manager lib
@@ -80,6 +84,9 @@ string beeHiveMessage; 									// The variable beeHiveMessage will inform the a
 // DHT dht(DHTPIN, DHT11);
 DHT dht(DHTPIN, DHT11,15);
 HX711 scale(HX711_DAT,HX711_CLK);
+
+SoftwareSerial mySerial(PIN_TX,PIN_RX);
+
 // ESP8266WebServer server(80);
 WiFiClient client;
 
@@ -89,17 +96,11 @@ void setup() {
 	// pinMode(DHTPIN, INPUT);
 	pinMode(PCBLED, OUTPUT);		// setting I/O
 	pinMode(ESPLED, OUTPUT);
-	pinMode(BLUE_LED, OUTPUT)
-	pinMode(RED_LED, OUTPUT);
-	pinMode(GREEN_LED, OUTPUT);
 
 	digitalWrite(PCBLED, HIGH);		// turning LEDs OFF
   	digitalWrite(ESPLED, HIGH);
-	digitalWrite(BLUE_LED, LOW);
-	digitalWrite(RED_LED, LOW);
-	digitalWrite(GREEN_LED, LOW);
 
-	Serial.begin(115200);			// starting serial
+	Serial.begin(BAUDRATE);			// starting serial
 	delay(100);
 
 	WiFiManager wifiManager;
@@ -121,18 +122,33 @@ void setup() {
 
 	delay(5000);
 	if (WiFi.status() != WL_CONNECTED) {
-		Serial.println("No WiFi. Enabling GPRS mode ...");
+		Serial.println("No WiFi. Enabling GPRS mode ...\n\r");
 		gprsMode = true;
 	}
+	delay(10);
 
-	delay(400);
+	mySerial.begin(BAUDRATE);
+	Serial.println("Software serial enabled.\n\r");
+	delay(10);
 
-	dht.begin();					// starting DHT sensor
-	delay(100);
+	GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
+	unsigned short gprsInitTimeout = 60; 						// 60 seconds timeout
+	while((!gprs.init()) && (gprsInitTimeout >= 0)) {
+		Serial.println("Error initializing GPRS! Retrying...");
+ 		delay(500);
+ 		Serial.print(".");
+		delay(500);
+		gprsInitTimeout--;
+ 	}
+
+	dht.begin();
+	Serial.println("DHT initiated.\n\r");
+	delay(10);
 	
-	scale.set_scale(-101800);		// starting HX711 chip
+	scale.set_scale(-101800);
 	scale.tare();
-	delay(100);
+	Serial.println("Scale initiated and calibrated.\n\r");
+	delay(10);
 }
 
 
@@ -267,6 +283,12 @@ void getMeasurements() {
 		beeHiveMessage += String(weight);
 		beeHiveMessage += " kg\r\n";
 	}
+
+	if (beeHiveMessage.length < 5) {
+		beeHiveMessage += "Error reading sensors!";
+	}
+
+	beeHiveMessage += "\0";
 	digitalWrite(ESPLED, HIGH);
 }
 
@@ -287,7 +309,7 @@ int readSMS() {
 		Serial.println(messageIndex);
 
 		// Reading SMS
-		gprs.readSMS(messageIndex, SMS_message, SMS_messageLength, SMS_phone, SMS_datetime);
+		gprs.readSMS(messageIndex, SMS_message, MESSAGE_LENGTH, SMS_phone, SMS_datetime);
 
 		// Print SMS data
 		Serial.print("From number: ");
@@ -338,6 +360,7 @@ int readSMS() {
 			returnValue = -2;
 		}
 
+		// Memory of Vodafone SIM can store up to 30 SMS
 		// Deleting SMS
 		Serial.println("Deleting current SMS ...");
 		gprs.deleteSMS(messageIndex);
@@ -359,14 +382,16 @@ int readSMS() {
 void sendSMS() {
 	Serial.println("Sending SMS message ...");
 	getMeasurements();
+
+	digitalWrite(ESPLED, LOW);
 	gprs.sendSMS(SMS_phone,beeHiveMessage);
+	digitalWrite(ESPLED, HIGH);
 }
 
 // ~~~ Thingspeak WiFi ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void Send2ThingSpeakWiFi() {
 	digitalWrite(ESPLED, LOW);
-	bool printInSerial = false;			// true: printing in HW serial // <?><?><?><?><?><?><?><?><?><?><?>
-	
+
 	if (client.connect(thingSpeakServer,80)) { 
 		Serial.println();
 		Serial.println("Sending data to Thingspeak...")
@@ -403,7 +428,6 @@ void Send2ThingSpeakWiFi() {
 // ~~~ Thingspeak GPRS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void Send2ThingSpeakGPRS() {
 	digitalWrite(ESPLED, LOW);
-	bool printInSerial = false;			// true: printing in HW serial
 
 	mySerial.println("AT+CBAND=\"EGSM_DCS_MODE\"");
 	if (printInSerial) { ShowSerialData(); }
