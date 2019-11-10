@@ -43,17 +43,28 @@ float temperature = 0;
 float humidity = 0;
 float weight = 0;
 
-unsigned long previousMillis = 0;
-int smsContent = 0;
+unsigned int uploadInterval   = 0;
+unsigned long currentMillis   = 0;
+const unsigned int smsInterv  = 5000;
+const unsigned int seconds30  = 30000;
+const unsigned int seconds45  = 45000;
+const unsigned int seconds90  = 90000;
+const unsigned int seconds120 = 120000;
+
+int SMS_command 		= 0;
+int SMS_phone 			= 0;
+int SMS_messageLength 	= 0;
+String SMS_message 		= "";
+String SMS_datetime 	= "";
 
 bool gprsMode = false;  								// true: GPRS , false: WiFi
 
-const char* smsReport = "report";						// --> reply back with SMS
-const char* smsUpload = "upload";						// --> upload instantly - once
-const char* smsUpload30 = "auto30";						// --> upload every 15 minutes
-const char* smsUpload45 = "auto45";						// --> upload every 45 minutes
-const char* smsUpload90 = "auto90";						// --> upload every 90 minutes
-const char* smsUpload120 = "auto120";					// --> upload every 120 minutes
+const char* smsReport		= "report";					// --> reply back with SMS
+const char* smsUpload 		= "upload";					// --> upload instantly - once
+const char* smsUpload30 	= "auto30";					// --> upload every 30 seconds
+const char* smsUpload45 	= "auto45";					// --> upload every 45 seconds
+const char* smsUpload90 	= "auto90";					// --> upload every 90 seconds
+const char* smsUpload120 	= "auto120";				// --> upload every 120 seconds
 const char* smsUploadCancel = "autocancel";				// --> cancel auto upload
 
 string beeHiveMessage; 									// The variable beeHiveMessage will inform the apiarist what
@@ -63,7 +74,6 @@ string beeHiveMessage; 									// The variable beeHiveMessage will inform the a
 // ~~~ WiFi data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~	// NOT NEEDED WITH WiFi Manager lib
 // char ssid[]              = TOLIS_MOBILE_SSID;
 // char password[]          = TOLIS_MOBILE_PASS;
-
 
 
 // ~~~ Initialising ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -129,74 +139,58 @@ void setup() {
 // ~~~ Main loop ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void loop() {
 
-	// checking for SMS
-	smsContent = readSMS();
-	bool smsReplyOK = false;
+  	currentMillis = millis();
 
-	switch (smsContent) {
+	// checking for SMS
+	if (currentMillis % smsInterv == 0) {
+		SMS_command = readSMS();
+	}
+
+	switch (SMS_command) {
 		case -2:							// Invalid SMS content
-			smsReplyOK = false;
+			;
 		break;
 		case -1:							// No unread SMS
 			;
 		break;
 		case 0:								// Auto upload canceled
-			// smsReplyOK = true;
+			uploadInterval = 0;
 		break;
 		case 1:								// Upload data once
-			smsReplyOK = true;
+			uploadInterval = 1;
 		break;
 		case 30:							// Upload every 30 seconds
-			smsReplyOK = true;
+			uploadInterval = seconds30;
 		break;
 		case 45:							// Upload every 45 seconds
-			smsReplyOK = true;
+			uploadInterval = seconds45;
 		break;
 		case 90:							// Upload every 90 seconds
-			smsReplyOK = true;
+			uploadInterval = seconds90;
 		break;
 		case 120:							// Upload every 120 seconds
-			smsReplyOK = true;
+			uploadInterval = seconds120;
 		break;
 		case 1000:							// Reply with SMS
-			Serial.println("Sending SMS message ...");
-
-			getMeasurements()
-			digitalWrite(BLUE_LED, HIGH);
-			gprs.sendSMS(phone,beeHiveMessage);
-			digitalWrite(BLUE_LED, LOW);
+			getMeasurements();
+			sendSMS();
 		break;
-		default:							// Invalid reply
-			smsReplyOK = false;
+		default:							// Invalid return code
+			Serial.println("WARNING: unexpected readSMS() reply!");
 		break;
 	}
 
-	/*  numOf1Kdelay :
-		~~~~~~~~~~~~~~ update frequency can be 15 / 45 / 90 / 120 minutes ~~~~~~~~~~~~~~
-		15'  :	0M	900K ms -->  15 x 60K |  60 x 15K | 180  x 5K | 900  x 1K 	ms_delay
-		45'  :	2M	700K ms -->  45 x 60K | 180 x 15K | 540  x 5K | 2700 x 1K 	ms_delay
-		90'	 : 	5M	400K ms -->  90 x 60K | 360 x 15K | 1080 x 5K | 5400 x 1K 	ms_delay
-		120' :	7M	200K ms --> 120 x 60K | 480 x 15K | 1440 x 5K | 7200 x 1K 	ms_delay
-		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	*/
+	if (
+		(uploadInterval != 0) && 
+		(currentMillis % uploadInterval == 0)
+	) {
 
-	// Counting auto-update interval time
-	for (short i = 0; i < numOf1Kdelay; i++)
-	{
-		digitalWrite(GREEN_LED, HIGH);
-		delay(1000);
-		readSMS();		// in case of new SMS, auto-update can be updated
-		digitalWrite(GREEN_LED, LOW);
-	}
+		// Reset uploadInterval if request was to upload once
+		if (uploadInterval == 1) {
+			uploadInterval = 0;
+		}
 
-
-	// Auto-update set
-	if (numOf1Kdelay != 0)
-	{
-		// get sensor data
 		getMeasurements();
-		
-		digitalWrite(BLUE_LED, HIGH);
 		if (!gprsMode)	// Sending data using WiFi
 		{
 			Send2ThingSpeakWiFi();
@@ -204,28 +198,15 @@ void loop() {
 		{
 			Send2ThingSpeakGPRS();
 		}
-		digitalWrite(BLUE_LED, LOW);
-
-		// Resetting interval when upload int was 1
-		if (numOf1Kdelay == 1)
-		{
-			numOf1Kdelay = 0;
-		}
 	}
-	// No auto-update - check for SMS every 30 sec
-	else
-	{
-		digitalWrite(GREEN_LED, HIGH);
-		delay(1000);
-		digitalWrite(GREEN_LED, LOW);
-		delay(29000);
-		readSMS();
-	}
+	
+	delay(10);	// to check if needed or not!
 }
 
 
 // ~~~ Getting sensor data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void getMeasurements() {
+	digitalWrite(ESPLED, LOW);
 	// reset values
 	temperature = 0;
 	humidity = 0;
@@ -286,25 +267,27 @@ void getMeasurements() {
 		beeHiveMessage += String(weight);
 		beeHiveMessage += " kg\r\n";
 	}
+	digitalWrite(ESPLED, HIGH);
 }
 
 
 // ~~~ Checking / Reading SMS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 int readSMS() {
+	digitalWrite(ESPLED, LOW);
+	int returnValue = -2;
     short messageIndex = gprs.isSMSunread();
-	// String message = "";
-	// int MESSAGE_LENGTH = 0;
-	// int phone = 0;
-	// String datetime = "";
 
-    Serial.print("Checked for unread SMS: "); 
-    Serial.println(messageIndex);
+    // Serial.print("Checked for unread SMS: "); 
+    // Serial.println(messageIndex);
     
 	// At least one unread SMS
 	while (messageIndex > 0) {
 
+		Serial.print("Analysing SMS with index: "); 
+		Serial.println(messageIndex);
+
 		// Reading SMS
-		gprs.readSMS(messageIndex, message, MESSAGE_LENGTH, phone, datetime);
+		gprs.readSMS(messageIndex, SMS_message, SMS_messageLength, SMS_phone, SMS_datetime);
 
 		// Print SMS data
 		Serial.print("From number: ");
@@ -317,43 +300,46 @@ int readSMS() {
     	Serial.println(datetime);
 
 		// If the substring is: smsReport OR smsUpload* [Cancel 30 45 90 120]
-		if (strstr(message, smsReport) != NULL) {
-			return 1000;
+		if (strstr(SMS_message, smsReport) != NULL) {
+			Serial.println("Requested SMS report ...");
+			returnValue = 1000;
 		}
-		else if (strstr(message, smsUpload) != NULL) {
-			return 1;
+		else if (strstr(SMS_message, smsUpload) != NULL) {
+			Serial.println("Requested to upload once ...");
+			returnValue = 1;
 		}
-		else if (strstr(message, smsUpload30) != NULL) {
-			Serial.println("Uploading to ThingSpeak every 30 seconds ...");
-			return 30;
+		else if (strstr(SMS_message, smsUpload30) != NULL) {
+			Serial.println("Requested to upload every 30 seconds ...");
+			returnValue = 30;
 		}
-		else if (strstr(message, smsUpload45) != NULL) 
+		else if (strstr(SMS_message, smsUpload45) != NULL) 
 		{
-			Serial.println("Uploading to ThingSpeak every 45 seconds ...");
-			return 45;
+			Serial.println("Requested to upload every 45 seconds ...");
+			returnValue = 45;
 		}
-		else if (strstr(message, smsUpload90) != NULL) 
+		else if (strstr(SMS_message, smsUpload90) != NULL) 
 		{
-			Serial.println("Uploading to ThingSpeak every 90 seconds ...");
-			return 90;
+			Serial.println("Requested to upload every 90 seconds ...");
+			returnValue = 90;
 		}
-		else if (strstr(message, smsUpload120) != NULL) 
+		else if (strstr(SMS_message, smsUpload120) != NULL) 
 		{
-			Serial.println("Uploading to ThingSpeak every 120 seconds ...");
-			return 120;
+			Serial.println("Requested to upload every 120 seconds ...");
+			returnValue = 120;
 		}
-		else if (strstr(message, smsUploadCancel) != NULL) 
+		else if (strstr(SMS_message, smsUploadCancel) != NULL) 
 		{
-			Serial.println("Uploading to ThingSpeak canceled");
-			return 0;
+			Serial.println("Requested to cancel auto upload.");
+			returnValue = 0;
 		}
 		else
 		{
 			Serial.println("Invalid SMS text.");
-			return -2;
+			returnValue = -2;
 		}
 
 		// Deleting SMS
+		Serial.println("Deleting current SMS ...");
 		gprs.deleteSMS(messageIndex);
 
     	// messageIndex = gprs.isSMSunread();					// <?><?><?><?><?><?><?<>?><?><?> DO I NEED TO CHECK AGAIN?
@@ -361,14 +347,25 @@ int readSMS() {
 	}
 	else {
 		// Serial.println("No unread SMS found.");
-		return -1;
+		returnValue = -1;
 	}
+
+	digitalWrite(ESPLED, HIGH);
+	return returnValue;
 }
 
 
+// ~~~ Sending SMS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+void sendSMS() {
+	Serial.println("Sending SMS message ...");
+	getMeasurements();
+	gprs.sendSMS(SMS_phone,beeHiveMessage);
+}
+
 // ~~~ Thingspeak WiFi ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void Send2ThingSpeakWiFi() {
-	boolean printInSerial = false;			// true: printing in HW serial // <?><?><?><?><?><?><?><?><?><?><?>
+	digitalWrite(ESPLED, LOW);
+	bool printInSerial = false;			// true: printing in HW serial // <?><?><?><?><?><?><?><?><?><?><?>
 	
 	if (client.connect(thingSpeakServer,80)) { 
 		Serial.println();
@@ -399,97 +396,100 @@ void Send2ThingSpeakWiFi() {
 		// curl -v --request POST --header "X-THINGSPEAKAPIKEY: THINGSP_WR_APIKEY" --data "field1=23&field2=70&field3=70" "http://api.thingspeak.com/update")
 	}
 	client.stop();
+	digitalWrite(ESPLED, HIGH);
 }
 
 
 // ~~~ Thingspeak GPRS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void Send2ThingSpeakGPRS() {
-  boolean printInSerial = false;			// true: printing in HW serial
+	digitalWrite(ESPLED, LOW);
+	bool printInSerial = false;			// true: printing in HW serial
 
-  mySerial.println("AT+CBAND=\"EGSM_DCS_MODE\"");
-  if (printInSerial) { ShowSerialData(); }
-  delay(200);
+	mySerial.println("AT+CBAND=\"EGSM_DCS_MODE\"");
+	if (printInSerial) { ShowSerialData(); }
+	delay(200);
 
-  //mySerial.println("AT+IPR=9600");
-  //if (printInSerial) { ShowSerialData(); }
-  //delay(100);
-  
-  mySerial.println("AT");
-  if (printInSerial) { ShowSerialData(); }
-  delay(200);
+	//mySerial.println("AT+IPR=9600");
+	//if (printInSerial) { ShowSerialData(); }
+	//delay(100);
+	
+	mySerial.println("AT");
+	if (printInSerial) { ShowSerialData(); }
+	delay(200);
 
-  mySerial.println("AT+CREG?");
-  if (printInSerial) { ShowSerialData(); }
-  delay(200);
+	mySerial.println("AT+CREG?");
+	if (printInSerial) { ShowSerialData(); }
+	delay(200);
 
-  //Set the connection type to GPRS	
-  mySerial.println("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"");
-  if (printInSerial) { ShowSerialData(); }
-  delay(500);
+	//Set the connection type to GPRS	
+	mySerial.println("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"");
+	if (printInSerial) { ShowSerialData(); }
+	delay(500);
 
-  //APN for Vodafone Greece --> 'internet.vodafone.gr'. APN For Cosmote Greece --> 'internet'
-  mySerial.println("AT+SAPBR=3,1,\"APN\",\"internet\"");
-  if (printInSerial) { ShowSerialData(); }
-  delay(500);
+	//APN for Vodafone Greece --> 'internet.vodafone.gr'. APN For Cosmote Greece --> 'internet'
+	mySerial.println("AT+SAPBR=3,1,\"APN\",\"internet\"");
+	if (printInSerial) { ShowSerialData(); }
+	delay(500);
 
-  //Enable the GPRS
-  mySerial.println("AT+SAPBR=1,1");
-  if (printInSerial) { ShowSerialData(); }
-  delay(3000);
+	//Enable the GPRS
+	mySerial.println("AT+SAPBR=1,1");
+	if (printInSerial) { ShowSerialData(); }
+	delay(3000);
 
-  //Query if the connection is setup properly, if we get back a IP address then we can proceed
-  mySerial.println("AT+SAPBR=2,1");
-  if (printInSerial) { ShowSerialData(); }
-  delay(500);
+	//Query if the connection is setup properly, if we get back a IP address then we can proceed
+	mySerial.println("AT+SAPBR=2,1");
+	if (printInSerial) { ShowSerialData(); }
+	delay(500);
 
-  //We were allocated a IP address and now we can proceed by enabling the HTTP mode
-  mySerial.println("AT+HTTPINIT");
-  if (printInSerial) { ShowSerialData(); }
-  delay(500);
-  
-  //Start by setting up the HTTP bearer profile identifier
-  mySerial.println("AT+HTTPPARA=\"CID\",1");
-  if (printInSerial) { ShowSerialData(); }
-  delay(500);
-  
-  //Setting up the url to the 'thingspeak.com' address 
-  string tempCall;
-  tempCall = "AT+HTTPPARA=\"URL\",\"http://api.thingspeak.com/update?api_key=";
-  tempCall += (String)apiKey;
-  tempCall += "&field1=";
-  tempCall += String(temperature);
-  tempCall += "&field2=";
-  tempCall += String(humidity);
-  tempCall += "&field3=";
-  tempCall += String(weight);
-  tempCall += "\"";
-  mySerial.println(tempCall);
-  //mySerial.println("AT+HTTPPARA=\"URL\",\"http://api.thingspeak.com/update?api_key=THINGSP_WR_APIKEY&field1=22&field2=15&field3=10\"");
-  if (printInSerial) { ShowSerialData(); }
-  delay(500);
-  
-  //Start the HTTP GET session
-  mySerial.println("AT+HTTPACTION=0");
-  if (printInSerial) { ShowSerialData(); }
-  delay(500);
-  
-  //end of data sending
-  mySerial.println("AT+HTTPREAD");
-  if (printInSerial) { ShowSerialData(); }
-  delay(100);
+	//We were allocated a IP address and now we can proceed by enabling the HTTP mode
+	mySerial.println("AT+HTTPINIT");
+	if (printInSerial) { ShowSerialData(); }
+	delay(500);
+	
+	//Start by setting up the HTTP bearer profile identifier
+	mySerial.println("AT+HTTPPARA=\"CID\",1");
+	if (printInSerial) { ShowSerialData(); }
+	delay(500);
+	
+	//Setting up the url to the 'thingspeak.com' address 
+	string tempCall;
+	tempCall = "AT+HTTPPARA=\"URL\",\"http://api.thingspeak.com/update?api_key=";
+	tempCall += (String)apiKey;
+	tempCall += "&field1=";
+	tempCall += String(temperature);
+	tempCall += "&field2=";
+	tempCall += String(humidity);
+	tempCall += "&field3=";
+	tempCall += String(weight);
+	tempCall += "\"";
+	mySerial.println(tempCall);
+	//mySerial.println("AT+HTTPPARA=\"URL\",\"http://api.thingspeak.com/update?api_key=THINGSP_WR_APIKEY&field1=22&field2=15&field3=10\"");
+	if (printInSerial) { ShowSerialData(); }
+	delay(500);
+	
+	//Start the HTTP GET session
+	mySerial.println("AT+HTTPACTION=0");
+	if (printInSerial) { ShowSerialData(); }
+	delay(500);
+	
+	//end of data sending
+	mySerial.println("AT+HTTPREAD");
+	if (printInSerial) { ShowSerialData(); }
+	delay(100);
+	digitalWrite(ESPLED, HIGH);
 }
 
 
-// ~~~ Finding text possition ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-int find_text(String needle, String haystack) {
-  int foundpos = -1;
-  for (int i = 0; i <= haystack.length() - needle.length(); i++) {
-    if (haystack.substring(i,needle.length()+i) == needle) {
-      foundpos = i;
-    }
-  }
-  return foundpos;
-}
+// // ~~~ Finding text possition ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// int find_text(String needle, String haystack) {
+//   int foundpos = -1;
+//   for (int i = 0; i <= haystack.length() - needle.length(); i++) {
+//     if (haystack.substring(i,needle.length()+i) == needle) {
+//       foundpos = i;
+//     }
+//   }
+//   return foundpos;
+// }
 
 
 // ~~~ Print SW serial into HW ~~~~~~~~~~~~~~~~~~~~~~~~~~~
