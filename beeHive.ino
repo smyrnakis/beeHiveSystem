@@ -1,17 +1,15 @@
 #include <Arduino.h>
-#include <ESP8266WiFi.h>
-// #include <DNSServer.h>
-// #include <ESP8266WebServer.h>
-#include <WiFiManager.h>
-// #include <WiFiUdp.h>
-
-#include <DHT.h>
-#include <HX711.h>
 #include <GPRS_Shield_Arduino.h>
 #include <sim900.h>
 
+#include <HX711.h>
+#include <DHT.h>
+
 #include <SoftwareSerial.h>
-// #include <Wire.h>
+#include <Wire.h>
+
+#include <ESP8266WiFi.h>
+#include <WiFiManager.h>
 
 #include "secrets.h"
 
@@ -56,10 +54,10 @@ const unsigned int seconds120 = 120000;
 int SMS_command = 0;				// After incoming SMS message
 
 int SMS_phone[16];
-char SMS_datetime[24];
+char *SMS_datetime[24];
 #define MESSAGE_LENGTH 160			// SMS charachter limit		// int SMS_messageLength = 160;
-char SMS_message[MESSAGE_LENGTH];	// Incoming SMS
-// int messageIndex = 0;			// Defined in the readSMS() func
+char *SMS_message[MESSAGE_LENGTH];	// Incoming SMS
+int messageIndex = 0;				// Defined in the readSMS() func
 
 bool gprsMode 		= false;		// True if no WiFi connection
 bool printInSerial 	= true;			// Printing in HW serial
@@ -81,9 +79,11 @@ char beeHiveMessage; 									// Contents of outgoing SMS message
 
 
 // ~~~ Initialising ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// DHT dht(DHTPIN, DHT11);
-DHT dht(DHTPIN, DHT11,15);
-HX711 scale(HX711_DAT,HX711_CLK);
+// // DHT dht(DHTPIN, DHT11);
+DHT dht(DHTPIN, DHT11, 15);
+// HX711 scale(HX711_DAT,HX711_CLK);
+HX711 scale;
+GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
 
 SoftwareSerial mySerial(PIN_TX,PIN_RX);
 
@@ -127,11 +127,12 @@ void setup() {
 	}
 	delay(10);
 
+	// SoftwareSerial mySerial(PIN_TX,PIN_RX);
 	mySerial.begin(BAUDRATE);
 	Serial.println("Software serial enabled.\n\r");
 	delay(10);
 
-	GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
+	// GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
 	unsigned short gprsInitTimeout = 60; 						// 60 seconds timeout
 	while((!gprs.init()) && (gprsInitTimeout >= 0)) {
 		Serial.println("Error initializing GPRS! Retrying...");
@@ -141,10 +142,15 @@ void setup() {
 		gprsInitTimeout--;
  	}
 
+	// DHT dht(DHTPIN, DHT11);
+	// DHT dht(DHTPIN, DHT11,15);
 	dht.begin();
 	Serial.println("DHT initiated.\n\r");
 	delay(10);
 	
+	// HX711 scale (HX711_DAT, HX711_CLK);
+	// HX711 scale;
+	scale.begin(HX711_DAT, HX711_CLK);
 	scale.set_scale(-101800);
 	scale.tare();
 	Serial.println("Scale initiated and calibrated.\n\r");
@@ -227,7 +233,7 @@ void getMeasurements() {
 	temperature = 0;
 	humidity = 0;
 	weight = 0;
-	beeHiveMessage = "";
+	beeHiveMessage = '\0';
 	
 	// read values
 	temperature = dht.readTemperature();
@@ -249,9 +255,9 @@ void getMeasurements() {
 		Serial.println("Temperature: ");
 		Serial.print(temperature);
 		Serial.print(" °C");
-		beeHiveMessage += "Temp: ";
-		beeHiveMessage += String(temperature);
-		beeHiveMessage += " °C\r\n" ;
+		beeHiveMessage += 'Temp: ';
+		beeHiveMessage += (char)temperature;
+		beeHiveMessage += '°C\r\n' ;
 	}
 
 	if (isnan(humidity))
@@ -264,9 +270,9 @@ void getMeasurements() {
 		Serial.println("Humidity: ");
 		Serial.print(humidity);
 		Serial.print(" %");
-		beeHiveMessage += "Hum: ";
-		beeHiveMessage += String(humidity);
-		beeHiveMessage += " %\r\n";
+		beeHiveMessage += 'Hum: ';
+		beeHiveMessage += (char)humidity;
+		beeHiveMessage += ' %\r\n';
 	}
 
 	if (isnan(weight))
@@ -279,16 +285,17 @@ void getMeasurements() {
 		Serial.println("Weight: ");
 		Serial.print(weight);
 		Serial.print(" kg");
-		beeHiveMessage += "Weight: ";
-		beeHiveMessage += String(weight);
-		beeHiveMessage += " kg\r\n";
+		beeHiveMessage += 'Weight: ';
+		beeHiveMessage += (char)weight;
+		beeHiveMessage += ' kg\r\n';
 	}
 
-	if (beeHiveMessage.length < 5) {
-		beeHiveMessage += "Error reading sensors!";
+	// When no sensor data
+	if ((temperature = -100) && (humidity = -100) && (weight = -100)) {
+		beeHiveMessage += 'Error reading sensors!';
 	}
 
-	beeHiveMessage += "\0";
+	beeHiveMessage += '\0';
 	digitalWrite(ESPLED, HIGH);
 }
 
@@ -303,76 +310,77 @@ int readSMS() {
     // Serial.println(messageIndex);
     
 	// At least one unread SMS
-	while (messageIndex > 0) {
-
-		Serial.print("Analysing SMS with index: "); 
-		Serial.println(messageIndex);
-
-		// Reading SMS
-		gprs.readSMS(messageIndex, SMS_message, MESSAGE_LENGTH, SMS_phone, SMS_datetime);
-
-		// Print SMS data
-		Serial.print("From number: ");
-		Serial.println(phone);  
-		Serial.print("Message Index: ");
-		Serial.println(messageIndex);        
-		Serial.print("Recieved Message: ");
-    	Serial.println(message);
-		Serial.print("Timestamp: ");
-    	Serial.println(datetime);
-
-		// If the substring is: smsReport OR smsUpload* [Cancel 30 45 90 120]
-		if (strstr(SMS_message, smsReport) != NULL) {
-			Serial.println("Requested SMS report ...");
-			returnValue = 1000;
-		}
-		else if (strstr(SMS_message, smsUpload) != NULL) {
-			Serial.println("Requested to upload once ...");
-			returnValue = 1;
-		}
-		else if (strstr(SMS_message, smsUpload30) != NULL) {
-			Serial.println("Requested to upload every 30 seconds ...");
-			returnValue = 30;
-		}
-		else if (strstr(SMS_message, smsUpload45) != NULL) 
-		{
-			Serial.println("Requested to upload every 45 seconds ...");
-			returnValue = 45;
-		}
-		else if (strstr(SMS_message, smsUpload90) != NULL) 
-		{
-			Serial.println("Requested to upload every 90 seconds ...");
-			returnValue = 90;
-		}
-		else if (strstr(SMS_message, smsUpload120) != NULL) 
-		{
-			Serial.println("Requested to upload every 120 seconds ...");
-			returnValue = 120;
-		}
-		else if (strstr(SMS_message, smsUploadCancel) != NULL) 
-		{
-			Serial.println("Requested to cancel auto upload.");
-			returnValue = 0;
-		}
-		else
-		{
-			Serial.println("Invalid SMS text.");
-			returnValue = -2;
-		}
-
-		// Memory of Vodafone SIM can store up to 30 SMS
-		// Deleting SMS
-		Serial.println("Deleting current SMS ...");
-		gprs.deleteSMS(messageIndex);
-
-    	// messageIndex = gprs.isSMSunread();					// <?><?><?><?><?><?><?<>?><?><?> DO I NEED TO CHECK AGAIN?
-    	// Serial.println("Just checked again for unread SMS"); 
-	}
-	else {
+	if (messageIndex = 0) {
 		// Serial.println("No unread SMS found.");
 		returnValue = -1;
 	}
+	else {
+		while (messageIndex > 0) {
 
+			Serial.print("Analysing SMS with index: "); 
+			Serial.println(messageIndex);
+
+			// Reading SMS
+			gprs.readSMS(messageIndex, SMS_message, MESSAGE_LENGTH, SMS_phone, SMS_datetime);
+
+			// Print SMS data
+			Serial.print("From number: ");
+			Serial.println(String(&SMS_phone));  
+			Serial.print("Message Index: ");
+			Serial.println(String(messageIndex));        
+			Serial.print("Recieved Message: ");
+			Serial.println(String(&SMS_message));
+			Serial.print("Timestamp: ");
+			Serial.println(String(SMS_datetime));
+
+			// If the substring is: smsReport OR smsUpload* [Cancel 30 45 90 120]
+			if (strstr(SMS_message, smsReport) != NULL) {
+				Serial.println("Requested SMS report ...");
+				returnValue = 1000;
+			}
+			else if (strstr(SMS_message, smsUpload) != NULL) {
+				Serial.println("Requested to upload once ...");
+				returnValue = 1;
+			}
+			else if (strstr(SMS_message, smsUpload30) != NULL) {
+				Serial.println("Requested to upload every 30 seconds ...");
+				returnValue = 30;
+			}
+			else if (strstr(SMS_message, smsUpload45) != NULL) 
+			{
+				Serial.println("Requested to upload every 45 seconds ...");
+				returnValue = 45;
+			}
+			else if (strstr(SMS_message, smsUpload90) != NULL) 
+			{
+				Serial.println("Requested to upload every 90 seconds ...");
+				returnValue = 90;
+			}
+			else if (strstr(SMS_message, smsUpload120) != NULL) 
+			{
+				Serial.println("Requested to upload every 120 seconds ...");
+				returnValue = 120;
+			}
+			else if (strstr(SMS_message, smsUploadCancel) != NULL) 
+			{
+				Serial.println("Requested to cancel auto upload.");
+				returnValue = 0;
+			}
+			else
+			{
+				Serial.println("Invalid SMS text.");
+				returnValue = -2;
+			}
+
+			// Memory of Vodafone SIM can store up to 30 SMS
+			// Deleting SMS
+			Serial.println("Deleting current SMS ...");
+			gprs.deleteSMS(messageIndex);
+
+			// messageIndex = gprs.isSMSunread();					// <?><?><?><?><?><?><?<>?><?><?> DO I NEED TO CHECK AGAIN?
+			// Serial.println("Just checked again for unread SMS"); 
+		}
+	}
 	digitalWrite(ESPLED, HIGH);
 	return returnValue;
 }
@@ -384,7 +392,7 @@ void sendSMS() {
 	getMeasurements();
 
 	digitalWrite(ESPLED, LOW);
-	gprs.sendSMS(SMS_phone,beeHiveMessage);
+	gprs.sendSMS(SMS_phone, &beeHiveMessage);
 	digitalWrite(ESPLED, HIGH);
 }
 
@@ -394,7 +402,7 @@ void Send2ThingSpeakWiFi() {
 
 	if (client.connect(thingSpeakServer,80)) { 
 		Serial.println();
-		Serial.println("Sending data to Thingspeak...")
+		Serial.println("Sending data to Thingspeak...");
 		Serial.println();
 		
 		String postStr = apiKey;
@@ -476,9 +484,9 @@ void Send2ThingSpeakGPRS() {
 	delay(500);
 	
 	//Setting up the url to the 'thingspeak.com' address 
-	string tempCall;
+	String tempCall;
 	tempCall = "AT+HTTPPARA=\"URL\",\"http://api.thingspeak.com/update?api_key=";
-	tempCall += (String)apiKey;
+	tempCall += String(apiKey);
 	tempCall += "&field1=";
 	tempCall += String(temperature);
 	tempCall += "&field2=";
