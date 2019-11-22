@@ -6,7 +6,6 @@
 #include <DHT.h>
 
 #include <SoftwareSerial.h>
-#include <Wire.h>
 
 #include <ESP8266WiFi.h>
 #include <WiFiManager.h>
@@ -53,10 +52,10 @@ const unsigned int seconds120 = 120000;
 
 int SMS_command = 0;				// After incoming SMS message
 
-int SMS_phone[16];
-char *SMS_datetime[24];
+char SMS_phone[16];
+char SMS_datetime[24];
 #define MESSAGE_LENGTH 160			// SMS charachter limit		// int SMS_messageLength = 160;
-char *SMS_message[MESSAGE_LENGTH];	// Incoming SMS
+char SMS_message[MESSAGE_LENGTH];	// Incoming SMS
 int messageIndex = 0;				// Defined in the readSMS() func
 
 bool gprsMode 		= false;		// True if no WiFi connection
@@ -255,9 +254,9 @@ void getMeasurements() {
 		Serial.println("Temperature: ");
 		Serial.print(temperature);
 		Serial.print(" °C");
-		beeHiveMessage += 'Temp: ';
+		beeHiveMessage += 'Temp:   ';
 		beeHiveMessage += (char)temperature;
-		beeHiveMessage += '°C\r\n' ;
+		beeHiveMessage += ' °C\r\n' ;
 	}
 
 	if (isnan(humidity))
@@ -270,7 +269,7 @@ void getMeasurements() {
 		Serial.println("Humidity: ");
 		Serial.print(humidity);
 		Serial.print(" %");
-		beeHiveMessage += 'Hum: ';
+		beeHiveMessage += 'Hum:   e ';
 		beeHiveMessage += (char)humidity;
 		beeHiveMessage += ' %\r\n';
 	}
@@ -325,11 +324,11 @@ int readSMS() {
 
 			// Print SMS data
 			Serial.print("From number: ");
-			Serial.println(String(&SMS_phone));  
+			Serial.println(String(SMS_phone));  
 			Serial.print("Message Index: ");
 			Serial.println(String(messageIndex));        
 			Serial.print("Recieved Message: ");
-			Serial.println(String(&SMS_message));
+			Serial.println(String(SMS_message));
 			Serial.print("Timestamp: ");
 			Serial.println(String(SMS_datetime));
 
