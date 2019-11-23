@@ -1,16 +1,17 @@
-#include <HX711.h>
+//#include <ESP8266WiFi.h>
+#include <math.h>
+#include <SoftwareSerial.h>
 
 #include <GPRS_Shield_Arduino.h>
 #include <sim900.h>
-
-//#include <GPRS_Shield_Arduino.h>
-//#include <sim900.h>
-
-#include <GPRS_Shield_Arduino.h>
-#include <SoftwareSerial.h>
-#include <Wire.h>
 #include <HX711.h>
-// #include <DHT.h>
+#include <Wire.h>
+#include <DHT.h>
+
+#include <WiFiEspClient.h>
+#include <WiFiEsp.h>
+#include <WiFiEspUdp.h>
+#include <PubSubClient.h>
 
 #include "secrets.h"
 
@@ -38,9 +39,9 @@ char apiKey[] = THINGSP_WR_APIKEY;						// API key w/ write access
 char defaultSSID[] = WIFI_DEFAULT_SSID;
 char defaultPASS[] = WIFI_DEFAULT_PASS;
 
-float temperature = 0;
-float humidity = 0;
-float weight = 0;
+float temperature = 0.0;
+float humidity = 0.0;
+float weight = 0.0;
 
 unsigned int uploadInterval   = 0;
 unsigned long currentMillis   = 0;
@@ -102,45 +103,20 @@ void setup() {
 	Serial.begin(BAUDRATE);			// starting serial
 	delay(100);
 
-	
+	short gprsInitTimeout = 30; 						// 60 seconds timeout
 
-	// GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
-	short gprsInitTimeout = 200; 						// 60 seconds timeout
+	Serial.print("Initializing GPRS...");
 
-	Serial.println("Initializing GPRS...");
-
-	// while(!gprs.init()) {
-	// 	delay(500);
-	// 	Serial.print(".");
-	// 	delay(500);
-	// }
-	// gprs.init();
-	// delay(5000);
-	// // Serial.println("GPRS PowerUp: ");
-	// // Serial.print(gprs.checkPowerUp());
-
-	// while((!gprs.checkPowerUp()) && (gprsInitTimeout > 0)) {
 	while((!gprs.init()) && (gprsInitTimeout > 0)) {
-		// Serial.println("Error initializing GPRS! Retrying...");
  		gprsInitTimeout--;
-		// gprs.init();
-		//Serial.print(".");
- 		Serial.print(gprsInitTimeout);
-		Serial.print(" ");
+		Serial.print(".");
 		delay(1000);
  	}
-	
-	// while(!gprs.checkPowerUp()) {
-	// 	delay(500);
-	// 	Serial.print(".");
-	// 	delay(500);
-	// }
   	
-	Serial.println("Done!");
-
-	Serial.print("GPRS PowerUp: ");
-	Serial.println(gprs.checkPowerUp());
-
+	if (gprs.checkPowerUp()) {
+		Serial.println(" done!\n\r");
+	}
+	delay(100);
 
 	mySerial.begin(BAUDRATE);
 	Serial.println("Software serial enabled.\n\r");
@@ -151,7 +127,7 @@ void setup() {
 	// dht.begin();							// commented on 23/11/2019
 	Serial.println("DHT initiated.\n\r");
 	delay(10);
-	
+
 	// HX711 scale (HX711_DAT, HX711_CLK);
 	// HX711 scale;
 	scale.begin(HX711_DAT, HX711_CLK);
