@@ -127,40 +127,40 @@ void setup() {
 	// }
 	// delay(10);
 
+	// GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
+	unsigned short gprsInitTimeout = 6; 						// 60 seconds timeout
+
+	Serial.println("Initializing GPRS...");
+	gprs.init();
+	delay(1000);
+	// Serial.println("GPRS PowerUp: ");
+	// Serial.print(gprs.checkPowerUp());
+
+	// while((!gprs.checkPowerUp()) && (gprsInitTimeout >= 0)) {
+	// while((!gprs.init()) && (gprsInitTimeout >= 0)) {
+	// 	// Serial.println("Error initializing GPRS! Retrying...");
+ 	// 	gprsInitTimeout--;
+	// 	gprs.init();
+ 	// 	Serial.print(".");
+	// 	delay(5000);
+ 	// }
+	
+	while(!gprs.checkPowerUp()) {
+		delay(500);
+		Serial.print(".");
+		delay(500);
+	}
+  	
+	Serial.println("Done!");
+
+	Serial.print("GPRS PowerUp: ");
+	Serial.println(gprs.checkPowerUp());
+
+
 	// SoftwareSerial mySerial(PIN_TX,PIN_RX);
 	mySerial.begin(BAUDRATE);
 	Serial.println("Software serial enabled.\n\r");
 	delay(1000);
-
-	// // GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
-	// unsigned short gprsInitTimeout = 6; 						// 60 seconds timeout
-
-	// Serial.println("Initializing GPRS...");
-	// gprs.init();
-	// delay(5000);
-	// // Serial.println("GPRS PowerUp: ");
-	// // Serial.print(gprs.checkPowerUp());
-
-	// // while((!gprs.checkPowerUp()) && (gprsInitTimeout >= 0)) {
-	// // while((!gprs.init()) && (gprsInitTimeout >= 0)) {
-	// // 	// Serial.println("Error initializing GPRS! Retrying...");
- 	// // 	gprsInitTimeout--;
-	// // 	gprs.init();
- 	// // 	Serial.print(".");
-	// // 	delay(5000);
- 	// // }
-	
-	// while(!gprs.checkPowerUp()) {
-	// 	delay(500);
-	// 	Serial.print(".");
-	// 	delay(500);
-	// }
-  	
-	// Serial.println("Done!");
-
-	// Serial.println("GPRS PowerUp: ");
-	// Serial.print(gprs.checkPowerUp());
-
 
 
 	// DHT dht(DHTPIN, DHT11);
