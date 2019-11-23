@@ -1,30 +1,32 @@
-#include <Arduino.h>
+#include <HX711.h>
+
 #include <GPRS_Shield_Arduino.h>
 #include <sim900.h>
 
-#include <HX711.h>
-#include <DHT.h>
+//#include <GPRS_Shield_Arduino.h>
+//#include <sim900.h>
 
+#include <GPRS_Shield_Arduino.h>
 #include <SoftwareSerial.h>
-
-#include <ESP8266WiFi.h>
-#include <WiFiManager.h>
+#include <Wire.h>
+#include <HX711.h>
+// #include <DHT.h>
 
 #include "secrets.h"
 
 
 // ~~~ PIN declaration ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#define PCBLED D0		// 16 / LED_BUILTIN
-#define ESPLED D4 		// 2
+#define PCBLED 13
+#define ESPLED 13
 
 // #define ANLG_IN A0
-#define DHTPIN D1 		// 5							// 2
+//#define DHTPIN 7
 
-#define HX711_CLK D2 	// 4							// 12	// D6	// white cable
-#define HX711_DAT D3	// 0							// D7	// green cable
+#define HX711_CLK 2
+#define HX711_DAT 3
 
-#define PIN_TX D5		// 14							// 7		// SD0	// yellow cable // Software serial for SIM900 communication
-#define PIN_RX D6		// 12							// 8		// SD1	// green cable
+#define PIN_TX 7	// 5	// yellow cable
+#define PIN_RX 8	// 6	// green cable
 
 
 // ~~~ Variables - constants ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -85,9 +87,6 @@ SoftwareSerial mySerial(PIN_TX,PIN_RX);
 
 GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
 
-// ESP8266WebServer server(80);
-WiFiClient client;
-
 
 // ~~~ Initializing ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void setup() {
@@ -103,52 +102,33 @@ void setup() {
 	Serial.begin(BAUDRATE);			// starting serial
 	delay(100);
 
-	// WiFiManager wifiManager;
-	// //wifiManager.resetSettings();
-	// wifiManager.setConfigPortalTimeout(120);  // 120 sec timeout for WiFi configuration
-	// wifiManager.autoConnect(defaultSSID, defaultPASS);
-
-	// Serial.println("Connected to WiFi.");
-	// Serial.print("IP: ");
-	// Serial.println(WiFi.localIP());
-	// Serial.println("\n\r");
-
-	// // server.on("/", handle_OnConnect);
-	// // server.on("/about", handle_OnConnectAbout);
-	// // server.onNotFound(handle_NotFound);
 	
-	// // server.begin();
-	// // Serial.println("HTTP server starter on port 80.");
 
-	// delay(2000);
-	// if (WiFi.status() != WL_CONNECTED) {
-	// 	Serial.println("No WiFi. Enabling GPRS mode ...\n\r");
-	// 	gprsMode = true;
+	// GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
+	short gprsInitTimeout = 200; 						// 60 seconds timeout
+
+	Serial.println("Initializing GPRS...");
+
+	// while(!gprs.init()) {
+	// 	delay(500);
+	// 	Serial.print(".");
+	// 	delay(500);
 	// }
-	// delay(10);
-
-	// SoftwareSerial mySerial(PIN_TX,PIN_RX);
-	mySerial.begin(BAUDRATE);
-	Serial.println("Software serial enabled.\n\r");
-	delay(1000);
-
-	// // GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
-	// unsigned short gprsInitTimeout = 6; 						// 60 seconds timeout
-
-	// Serial.println("Initializing GPRS...");
 	// gprs.init();
 	// delay(5000);
 	// // Serial.println("GPRS PowerUp: ");
 	// // Serial.print(gprs.checkPowerUp());
 
-	// // while((!gprs.checkPowerUp()) && (gprsInitTimeout >= 0)) {
-	// // while((!gprs.init()) && (gprsInitTimeout >= 0)) {
-	// // 	// Serial.println("Error initializing GPRS! Retrying...");
- 	// // 	gprsInitTimeout--;
-	// // 	gprs.init();
- 	// // 	Serial.print(".");
-	// // 	delay(5000);
- 	// // }
+	// while((!gprs.checkPowerUp()) && (gprsInitTimeout > 0)) {
+	while((!gprs.init()) && (gprsInitTimeout > 0)) {
+		// Serial.println("Error initializing GPRS! Retrying...");
+ 		gprsInitTimeout--;
+		// gprs.init();
+		//Serial.print(".");
+ 		Serial.print(gprsInitTimeout);
+		Serial.print(" ");
+		delay(1000);
+ 	}
 	
 	// while(!gprs.checkPowerUp()) {
 	// 	delay(500);
@@ -156,12 +136,15 @@ void setup() {
 	// 	delay(500);
 	// }
   	
-	// Serial.println("Done!");
+	Serial.println("Done!");
 
-	// Serial.println("GPRS PowerUp: ");
-	// Serial.print(gprs.checkPowerUp());
+	Serial.print("GPRS PowerUp: ");
+	Serial.println(gprs.checkPowerUp());
 
 
+	mySerial.begin(BAUDRATE);
+	Serial.println("Software serial enabled.\n\r");
+	delay(100);
 
 	// DHT dht(DHTPIN, DHT11);
 	// DHT dht(DHTPIN, DHT11,15);
@@ -269,7 +252,7 @@ void getMeasurements() {
 	// delay(50);
 	temperature = random(18, 24);
 	humidity = random(29, 36);
-	weight = scale.get_units(10);
+	weight = abs(scale.get_units(10));
 	delay(50);
 
 
@@ -429,35 +412,35 @@ void sendSMS() {
 void Send2ThingSpeakWiFi() {
 	digitalWrite(ESPLED, LOW);
 
-	if (client.connect(thingSpeakServer,80)) { 
-		Serial.println();
-		Serial.println("Sending data to Thingspeak...");
-		Serial.println();
+	// if (client.connect(thingSpeakServer,80)) { 
+	// 	Serial.println();
+	// 	Serial.println("Sending data to Thingspeak...");
+	// 	Serial.println();
 		
-		String postStr = apiKey;
-		postStr +="&field1=";
-		postStr += String(temperature);
-		postStr +="&field2=";
-		postStr += String(humidity);
-		postStr +="&field3=";
-		postStr += String(weight);
-		postStr += "\r\n\r\n";
+	// 	String postStr = apiKey;
+	// 	postStr +="&field1=";
+	// 	postStr += String(temperature);
+	// 	postStr +="&field2=";
+	// 	postStr += String(humidity);
+	// 	postStr +="&field3=";
+	// 	postStr += String(weight);
+	// 	postStr += "\r\n\r\n";
 
-		client.print("POST /update HTTP/1.1\n");
-		client.print("Host: api.thingspeak.com\n");
-		client.print("Connection: close\n");
-		client.print("X-THINGSPEAKAPIKEY: " + (String)apiKey + "\n");
-		client.print("Content-Type: application/x-www-form-urlencoded\n");
-		client.print("Content-Length: ");
-		client.print(postStr.length());
-		client.print("\n\n");
-		client.print(postStr);
+	// 	client.print("POST /update HTTP/1.1\n");
+	// 	client.print("Host: api.thingspeak.com\n");
+	// 	client.print("Connection: close\n");
+	// 	client.print("X-THINGSPEAKAPIKEY: " + (String)apiKey + "\n");
+	// 	client.print("Content-Type: application/x-www-form-urlencoded\n");
+	// 	client.print("Content-Length: ");
+	// 	client.print(postStr.length());
+	// 	client.print("\n\n");
+	// 	client.print(postStr);
 
-		Serial.println("Data sent to Thingspeak succesfully.");
+	// 	Serial.println("Data sent to Thingspeak succesfully.");
 		
-		// curl -v --request POST --header "X-THINGSPEAKAPIKEY: THINGSP_WR_APIKEY" --data "field1=23&field2=70&field3=70" "http://api.thingspeak.com/update")
-	}
-	client.stop();
+	// 	// curl -v --request POST --header "X-THINGSPEAKAPIKEY: THINGSP_WR_APIKEY" --data "field1=23&field2=70&field3=70" "http://api.thingspeak.com/update")
+	// }
+	// client.stop();
 	digitalWrite(ESPLED, HIGH);
 }
 
