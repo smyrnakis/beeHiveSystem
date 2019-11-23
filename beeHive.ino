@@ -79,7 +79,7 @@ char beeHiveMessage; 									// Contents of outgoing SMS message
 
 // ~~~ Initialising ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // // DHT dht(DHTPIN, DHT11);
-DHT dht(DHTPIN, DHT11, 15);
+// DHT dht(DHTPIN, DHT11, 15);				// commented on 23/11/2019
 // HX711 scale(HX711_DAT,HX711_CLK);
 HX711 scale;
 GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
@@ -98,6 +98,8 @@ void setup() {
 
 	digitalWrite(PCBLED, HIGH);		// turning LEDs OFF
   	digitalWrite(ESPLED, HIGH);
+
+	randomSeed(analogRead(0));
 
 	Serial.begin(BAUDRATE);			// starting serial
 	delay(100);
@@ -143,7 +145,7 @@ void setup() {
 
 	// DHT dht(DHTPIN, DHT11);
 	// DHT dht(DHTPIN, DHT11,15);
-	dht.begin();
+	// dht.begin();							// commented on 23/11/2019
 	Serial.println("DHT initiated.\n\r");
 	delay(10);
 	
@@ -201,6 +203,10 @@ void loop() {
 		break;
 	}
 
+	if (currentMillis % smsInterv == 0) {
+		serialPrintAll();
+	}
+
 	if (
 		(uploadInterval != 0) && 
 		(currentMillis % uploadInterval == 0)
@@ -221,7 +227,7 @@ void loop() {
 		}
 	}
 	
-	delay(10);	// to check if needed or not!
+	// delay(10);	// to check if needed or not!
 }
 
 
@@ -235,10 +241,12 @@ void getMeasurements() {
 	beeHiveMessage = '\0';
 	
 	// read values
-	temperature = dht.readTemperature();
-	delay(50);
-	humidity = dht.readHumidity();
-	delay(50);
+	// temperature = dht.readTemperature();
+	// delay(50);
+	// humidity = dht.readHumidity();
+	// delay(50);
+	temperature = random(18, 24);
+	humidity = random(29, 36);
 	weight = scale.get_units(10);
 	delay(50);
 
@@ -388,7 +396,7 @@ int readSMS() {
 // ~~~ Sending SMS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void sendSMS() {
 	Serial.println("Sending SMS message ...");
-	getMeasurements();
+	// getMeasurements();
 
 	digitalWrite(ESPLED, LOW);
 	gprs.sendSMS(SMS_phone, &beeHiveMessage);
@@ -522,6 +530,19 @@ void Send2ThingSpeakGPRS() {
 //   return foundpos;
 // }
 
+// Serial print data
+void serialPrintAll() {
+  Serial.print("Temperature: ");
+  Serial.print(String(temperature));
+  Serial.println("°C");
+  Serial.print("Humidity: ");
+  Serial.print(String(humidity));
+  Serial.println("%");
+  Serial.print("Weight: ");
+  Serial.print(String(weight));
+  Serial.println(" kg");
+  Serial.println();
+}
 
 // ~~~ Print SW serial into HW ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void ShowSerialData() {
