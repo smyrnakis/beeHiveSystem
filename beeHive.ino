@@ -14,19 +14,17 @@
 
 
 // ~~~ PIN declaration ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#define PCBLED 16		// D0 / LED_BUILTIN
-#define ESPLED 2 		// D4
+#define PCBLED D0		// 16 / LED_BUILTIN
+#define ESPLED D4 		// 2
 
 // #define ANLG_IN A0
-#define DHTPIN 5 		// D1	old: 2
-// #define GSM_TX 7		// SD0
-// #define GSM_RX 8		// SD1
+#define DHTPIN D1 		// 5							// 2
 
-#define HX711_CLK 12	// D6
-#define HX711_DAT 13	// D7
+#define HX711_CLK D2 	// 4							// 12	// D6	// white cable
+#define HX711_DAT D3	// 0							// D7	// green cable
 
-#define PIN_TX 7		// SD0	// Software serial for SIM900 communication
-#define PIN_RX 8		// SD1
+#define PIN_TX D5		// 14							// 7		// SD0	// yellow cable // Software serial for SIM900 communication
+#define PIN_RX D6		// 12							// 8		// SD1	// green cable
 
 
 // ~~~ Variables - constants ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -82,9 +80,10 @@ char beeHiveMessage; 									// Contents of outgoing SMS message
 // DHT dht(DHTPIN, DHT11, 15);				// commented on 23/11/2019
 // HX711 scale(HX711_DAT,HX711_CLK);
 HX711 scale;
-GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
 
 SoftwareSerial mySerial(PIN_TX,PIN_RX);
+
+GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
 
 // ESP8266WebServer server(80);
 WiFiClient client;
@@ -104,44 +103,65 @@ void setup() {
 	Serial.begin(BAUDRATE);			// starting serial
 	delay(100);
 
-	WiFiManager wifiManager;
-	//wifiManager.resetSettings();
-	wifiManager.setConfigPortalTimeout(120);  // 120 sec timeout for WiFi configuration
-	wifiManager.autoConnect(defaultSSID, defaultPASS);
+	// WiFiManager wifiManager;
+	// //wifiManager.resetSettings();
+	// wifiManager.setConfigPortalTimeout(120);  // 120 sec timeout for WiFi configuration
+	// wifiManager.autoConnect(defaultSSID, defaultPASS);
 
-	Serial.println("Connected to WiFi.");
-	Serial.print("IP: ");
-	Serial.println(WiFi.localIP());
-	Serial.println("\n\r");
+	// Serial.println("Connected to WiFi.");
+	// Serial.print("IP: ");
+	// Serial.println(WiFi.localIP());
+	// Serial.println("\n\r");
 
-	// server.on("/", handle_OnConnect);
-	// server.on("/about", handle_OnConnectAbout);
-	// server.onNotFound(handle_NotFound);
+	// // server.on("/", handle_OnConnect);
+	// // server.on("/about", handle_OnConnectAbout);
+	// // server.onNotFound(handle_NotFound);
 	
-	// server.begin();
-	// Serial.println("HTTP server starter on port 80.");
+	// // server.begin();
+	// // Serial.println("HTTP server starter on port 80.");
 
-	delay(5000);
-	if (WiFi.status() != WL_CONNECTED) {
-		Serial.println("No WiFi. Enabling GPRS mode ...\n\r");
-		gprsMode = true;
-	}
-	delay(10);
+	// delay(2000);
+	// if (WiFi.status() != WL_CONNECTED) {
+	// 	Serial.println("No WiFi. Enabling GPRS mode ...\n\r");
+	// 	gprsMode = true;
+	// }
+	// delay(10);
 
 	// SoftwareSerial mySerial(PIN_TX,PIN_RX);
 	mySerial.begin(BAUDRATE);
 	Serial.println("Software serial enabled.\n\r");
-	delay(10);
+	delay(1000);
 
-	// GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
-	unsigned short gprsInitTimeout = 60; 						// 60 seconds timeout
-	while((!gprs.init()) && (gprsInitTimeout >= 0)) {
-		Serial.println("Error initializing GPRS! Retrying...");
- 		delay(500);
- 		Serial.print(".");
-		delay(500);
-		gprsInitTimeout--;
- 	}
+	// // GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
+	// unsigned short gprsInitTimeout = 6; 						// 60 seconds timeout
+
+	// Serial.println("Initializing GPRS...");
+	// gprs.init();
+	// delay(5000);
+	// // Serial.println("GPRS PowerUp: ");
+	// // Serial.print(gprs.checkPowerUp());
+
+	// // while((!gprs.checkPowerUp()) && (gprsInitTimeout >= 0)) {
+	// // while((!gprs.init()) && (gprsInitTimeout >= 0)) {
+	// // 	// Serial.println("Error initializing GPRS! Retrying...");
+ 	// // 	gprsInitTimeout--;
+	// // 	gprs.init();
+ 	// // 	Serial.print(".");
+	// // 	delay(5000);
+ 	// // }
+	
+	// while(!gprs.checkPowerUp()) {
+	// 	delay(500);
+	// 	Serial.print(".");
+	// 	delay(500);
+	// }
+  	
+	// Serial.println("Done!");
+
+	// Serial.println("GPRS PowerUp: ");
+	// Serial.print(gprs.checkPowerUp());
+
+
 
 	// DHT dht(DHTPIN, DHT11);
 	// DHT dht(DHTPIN, DHT11,15);
@@ -164,10 +184,11 @@ void loop() {
 
   	currentMillis = millis();
 
-	// checking for SMS
-	if (currentMillis % smsInterv == 0) {
-		SMS_command = readSMS();
-	}
+	// // checking for SMS
+	// if (currentMillis % smsInterv == 0) {
+	// 	SMS_command = readSMS();
+	// }
+	SMS_command = -1;
 
 	switch (SMS_command) {
 		case -2:							// Invalid SMS content
@@ -203,8 +224,9 @@ void loop() {
 		break;
 	}
 
-	if (currentMillis % smsInterv == 0) {
-		serialPrintAll();
+	if (currentMillis % 2500 == 0) {
+		getMeasurements();
+		Serial.println("");
 	}
 
 	if (
@@ -233,7 +255,7 @@ void loop() {
 
 // ~~~ Getting sensor data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void getMeasurements() {
-	digitalWrite(ESPLED, LOW);
+	digitalWrite(PCBLED, LOW);
 	// reset values
 	temperature = 0;
 	humidity = 0;
@@ -259,9 +281,9 @@ void getMeasurements() {
 	}
 	else
 	{
-		Serial.println("Temperature: ");
+		Serial.print("Temperature: ");
 		Serial.print(temperature);
-		Serial.print(" °C");
+		Serial.println(" °C");
 		beeHiveMessage += 'Temp:   ';
 		beeHiveMessage += (char)temperature;
 		beeHiveMessage += ' °C\r\n' ;
@@ -274,9 +296,9 @@ void getMeasurements() {
 	}
 	else
 	{
-		Serial.println("Humidity: ");
+		Serial.print("Humidity: ");
 		Serial.print(humidity);
-		Serial.print(" %");
+		Serial.println(" %");
 		beeHiveMessage += 'Hum:   e ';
 		beeHiveMessage += (char)humidity;
 		beeHiveMessage += ' %\r\n';
@@ -289,9 +311,9 @@ void getMeasurements() {
 	}
 	else
 	{
-		Serial.println("Weight: ");
+		Serial.print("Weight: ");
 		Serial.print(weight);
-		Serial.print(" kg");
+		Serial.println(" kg");
 		beeHiveMessage += 'Weight: ';
 		beeHiveMessage += (char)weight;
 		beeHiveMessage += ' kg\r\n';
@@ -303,7 +325,7 @@ void getMeasurements() {
 	}
 
 	beeHiveMessage += '\0';
-	digitalWrite(ESPLED, HIGH);
+	digitalWrite(PCBLED, HIGH);
 }
 
 
@@ -384,7 +406,7 @@ int readSMS() {
 			Serial.println("Deleting current SMS ...");
 			gprs.deleteSMS(messageIndex);
 
-			// messageIndex = gprs.isSMSunread();					// <?><?><?><?><?><?><?<>?><?><?> DO I NEED TO CHECK AGAIN?
+			messageIndex = gprs.isSMSunread();
 			// Serial.println("Just checked again for unread SMS"); 
 		}
 	}
@@ -466,7 +488,7 @@ void Send2ThingSpeakGPRS() {
 	delay(500);
 
 	//APN for Vodafone Greece --> 'internet.vodafone.gr'. APN For Cosmote Greece --> 'internet'
-	mySerial.println("AT+SAPBR=3,1,\"APN\",\"internet\"");
+	mySerial.println("AT+SAPBR=3,1,\"APN\",\"internet.vodafone.gr\"");
 	if (printInSerial) { ShowSerialData(); }
 	delay(500);
 
