@@ -1,5 +1,4 @@
-//#include <ESP8266WiFi.h>
-#include <math.h>
+#include <ESP8266WiFi.h>
 #include <SoftwareSerial.h>
 
 #include <GPRS_Shield_Arduino.h>
@@ -8,10 +7,10 @@
 #include <Wire.h>
 #include <DHT.h>
 
-#include <WiFiEspClient.h>
-#include <WiFiEsp.h>
-#include <WiFiEspUdp.h>
-#include <PubSubClient.h>
+// #include <WiFiEspClient.h>
+// #include <WiFiEsp.h>
+// #include <WiFiEspUdp.h>
+// #include <PubSubClient.h>
 
 #include "secrets.h"
 
@@ -26,8 +25,10 @@
 #define HX711_CLK 2
 #define HX711_DAT 3
 
-#define PIN_TX 7	// 5	// yellow cable
-#define PIN_RX 8	// 6	// green cable
+#define PIN_TX_GSM 7	// 5	// yellow cable
+#define PIN_RX_GSM 8	// 6	// green cable
+#define PIN_TX_ESP 10
+#define PIN_RX_ESP 11
 
 
 // ~~~ Variables - constants ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -83,9 +84,10 @@ DHT dht(DHTPIN, DHT11);
 // DHT dht(DHTPIN, DHT11, 15);
 HX711 scale;
 
-SoftwareSerial mySerial(PIN_TX,PIN_RX);
+SoftwareSerial mySerialGSM(PIN_TX_GSM,PIN_RX_GSM);
+SoftwareSerial mySerialESP(PIN_TX_ESP,PIN_RX_ESP);
 
-GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
+GPRS gprs(PIN_TX_GSM,PIN_RX_GSM,BAUDRATE);
 
 
 // ~~~ Initializing ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -122,18 +124,15 @@ void setup() {
 	}
 	delay(100);
 
-	mySerial.begin(BAUDRATE);
-	Serial.println("Software serial enabled.\n\r");
+	mySerialGSM.begin(BAUDRATE);
+	mySerialESP.begin(BAUDRATE);
+	Serial.println("Software serials enabled.\n\r");
 	delay(100);
 
-	// DHT dht(DHTPIN, DHT11);
-	// DHT dht(DHTPIN, DHT11,15);
 	dht.begin();
 	Serial.println("DHT initiated.\n\r");
 	delay(10);
 
-	// HX711 scale (HX711_DAT, HX711_CLK);
-	// HX711 scale;
 	scale.begin(HX711_DAT, HX711_CLK);
 	scale.set_scale(-101800);
 	scale.tare();
@@ -234,7 +233,7 @@ void getMeasurements() {
 	delay(50);
 	// temperature = random(18, 24);
 	// humidity = random(29, 36);
-	weight = abs(scale.get_units(10));
+	weight = std::abs(scale.get_units(10));
 	delay(50);
 
 
@@ -430,49 +429,49 @@ void Send2ThingSpeakWiFi() {
 void Send2ThingSpeakGPRS() {
 	digitalWrite(ESPLED, LOW);
 
-	mySerial.println("AT+CBAND=\"EGSM_DCS_MODE\"");
+	mySerialGSM.println("AT+CBAND=\"EGSM_DCS_MODE\"");
 	if (printInSerial) { ShowSerialData(); }
 	delay(200);
 
-	//mySerial.println("AT+IPR=9600");
+	//mySerialGSM.println("AT+IPR=9600");
 	//if (printInSerial) { ShowSerialData(); }
 	//delay(100);
 	
-	mySerial.println("AT");
+	mySerialGSM.println("AT");
 	if (printInSerial) { ShowSerialData(); }
 	delay(200);
 
-	mySerial.println("AT+CREG?");
+	mySerialGSM.println("AT+CREG?");
 	if (printInSerial) { ShowSerialData(); }
 	delay(200);
 
 	//Set the connection type to GPRS	
-	mySerial.println("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"");
+	mySerialGSM.println("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"");
 	if (printInSerial) { ShowSerialData(); }
 	delay(500);
 
 	//APN for Vodafone Greece --> 'internet.vodafone.gr'. APN For Cosmote Greece --> 'internet'
-	mySerial.println("AT+SAPBR=3,1,\"APN\",\"internet.vodafone.gr\"");
+	mySerialGSM.println("AT+SAPBR=3,1,\"APN\",\"internet.vodafone.gr\"");
 	if (printInSerial) { ShowSerialData(); }
 	delay(500);
 
 	//Enable the GPRS
-	mySerial.println("AT+SAPBR=1,1");
+	mySerialGSM.println("AT+SAPBR=1,1");
 	if (printInSerial) { ShowSerialData(); }
 	delay(3000);
 
 	//Query if the connection is setup properly, if we get back a IP address then we can proceed
-	mySerial.println("AT+SAPBR=2,1");
+	mySerialGSM.println("AT+SAPBR=2,1");
 	if (printInSerial) { ShowSerialData(); }
 	delay(500);
 
 	//We were allocated a IP address and now we can proceed by enabling the HTTP mode
-	mySerial.println("AT+HTTPINIT");
+	mySerialGSM.println("AT+HTTPINIT");
 	if (printInSerial) { ShowSerialData(); }
 	delay(500);
 	
 	//Start by setting up the HTTP bearer profile identifier
-	mySerial.println("AT+HTTPPARA=\"CID\",1");
+	mySerialGSM.println("AT+HTTPPARA=\"CID\",1");
 	if (printInSerial) { ShowSerialData(); }
 	delay(500);
 	
@@ -487,18 +486,18 @@ void Send2ThingSpeakGPRS() {
 	tempCall += "&field3=";
 	tempCall += String(weight);
 	tempCall += "\"";
-	mySerial.println(tempCall);
-	//mySerial.println("AT+HTTPPARA=\"URL\",\"http://api.thingspeak.com/update?api_key=THINGSP_WR_APIKEY&field1=22&field2=15&field3=10\"");
+	mySerialGSM.println(tempCall);
+	//mySerialGSM.println("AT+HTTPPARA=\"URL\",\"http://api.thingspeak.com/update?api_key=THINGSP_WR_APIKEY&field1=22&field2=15&field3=10\"");
 	if (printInSerial) { ShowSerialData(); }
 	delay(500);
 	
 	//Start the HTTP GET session
-	mySerial.println("AT+HTTPACTION=0");
+	mySerialGSM.println("AT+HTTPACTION=0");
 	if (printInSerial) { ShowSerialData(); }
 	delay(500);
 	
 	//end of data sending
-	mySerial.println("AT+HTTPREAD");
+	mySerialGSM.println("AT+HTTPREAD");
 	if (printInSerial) { ShowSerialData(); }
 	delay(100);
 	digitalWrite(ESPLED, HIGH);
@@ -532,6 +531,6 @@ void serialPrintAll() {
 
 // ~~~ Print SW serial into HW ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void ShowSerialData() {
-  while (mySerial.available() != 0)
-    Serial.write(mySerial.read());
+  while (mySerialGSM.available() != 0)
+    Serial.write(mySerialGSM.read());
 }
