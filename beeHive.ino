@@ -45,7 +45,7 @@ float weight = 0.0;
 
 unsigned int uploadInterval   = 0;
 unsigned long currentMillis   = 0;
-const unsigned int smsInterv  = 5000;
+const unsigned int smsInterv  = 10000;
 const unsigned int seconds30  = 30000;
 const unsigned int seconds45  = 45000;
 const unsigned int seconds90  = 90000;
@@ -105,15 +105,20 @@ void setup() {
 	short gprsInitTimeout = 30; 						// 60 seconds timeout
 
 	Serial.print("Initializing GPRS...");
+	gprs.init();
 
-	while((!gprs.init()) && (gprsInitTimeout > 0)) {
- 		gprsInitTimeout--;
+	while((!gprs.checkPowerUp()) && (gprsInitTimeout > 0)) {
+ 		delay(1000);
+		gprsInitTimeout--;
 		Serial.print(".");
-		delay(1000);
+		gprs.init();
  	}
   	
 	if (gprs.checkPowerUp()) {
 		Serial.println(" done!\n\r");
+	}
+	else {
+		Serial.println(" failed!\n\r");
 	}
 	delay(100);
 
