@@ -21,7 +21,7 @@
 #define ESPLED 13
 
 // #define ANLG_IN A0
-//#define DHTPIN 7
+#define DHTPIN 5
 
 #define HX711_CLK 2
 #define HX711_DAT 3
@@ -79,9 +79,8 @@ char beeHiveMessage; 									// Contents of outgoing SMS message
 
 
 // ~~~ Initialising ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// // DHT dht(DHTPIN, DHT11);
-// DHT dht(DHTPIN, DHT11, 15);				// commented on 23/11/2019
-// HX711 scale(HX711_DAT,HX711_CLK);
+DHT dht(DHTPIN, DHT11);
+// DHT dht(DHTPIN, DHT11, 15);
 HX711 scale;
 
 SoftwareSerial mySerial(PIN_TX,PIN_RX);
@@ -91,7 +90,7 @@ GPRS gprs(PIN_TX,PIN_RX,BAUDRATE);
 
 // ~~~ Initializing ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void setup() {
-	// pinMode(DHTPIN, INPUT);
+	pinMode(DHTPIN, INPUT);
 	pinMode(PCBLED, OUTPUT);		// setting I/O
 	pinMode(ESPLED, OUTPUT);
 
@@ -124,7 +123,7 @@ void setup() {
 
 	// DHT dht(DHTPIN, DHT11);
 	// DHT dht(DHTPIN, DHT11,15);
-	// dht.begin();							// commented on 23/11/2019
+	dht.begin();
 	Serial.println("DHT initiated.\n\r");
 	delay(10);
 
@@ -143,11 +142,12 @@ void loop() {
 
   	currentMillis = millis();
 
-	// // checking for SMS
-	// if (currentMillis % smsInterv == 0) {
-	// 	SMS_command = readSMS();
-	// }
-	SMS_command = -1;
+	// checking for SMS
+	if (currentMillis % smsInterv == 0) {
+		SMS_command = readSMS();
+		Serial.print("SMS_command (return): ");
+		Serial.println(SMS_command);
+	}
 
 	switch (SMS_command) {
 		case -2:							// Invalid SMS content
@@ -184,6 +184,7 @@ void loop() {
 	}
 
 	if (currentMillis % 2500 == 0) {
+		Serial.println("");
 		getMeasurements();
 		Serial.println("");
 	}
@@ -220,14 +221,14 @@ void getMeasurements() {
 	humidity = 0;
 	weight = 0;
 	beeHiveMessage = '\0';
-	
+
 	// read values
-	// temperature = dht.readTemperature();
-	// delay(50);
-	// humidity = dht.readHumidity();
-	// delay(50);
-	temperature = random(18, 24);
-	humidity = random(29, 36);
+	temperature = dht.readTemperature();
+	delay(50);
+	humidity = dht.readHumidity();
+	delay(50);
+	// temperature = random(18, 24);
+	// humidity = random(29, 36);
 	weight = abs(scale.get_units(10));
 	delay(50);
 
@@ -294,11 +295,11 @@ int readSMS() {
 	int returnValue = -2;
     short messageIndex = gprs.isSMSunread();
 
-    // Serial.print("Checked for unread SMS: "); 
-    // Serial.println(messageIndex);
+    Serial.print("Checked for unread SMS (index): "); 
+    Serial.println(messageIndex);
     
 	// At least one unread SMS
-	if (messageIndex = 0) {
+	if (messageIndex <= 0) {
 		// Serial.println("No unread SMS found.");
 		returnValue = -1;
 	}
@@ -377,7 +378,6 @@ int readSMS() {
 // ~~~ Sending SMS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void sendSMS() {
 	Serial.println("Sending SMS message ...");
-	// getMeasurements();
 
 	digitalWrite(ESPLED, LOW);
 	gprs.sendSMS(SMS_phone, &beeHiveMessage);
