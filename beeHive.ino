@@ -34,9 +34,45 @@
 // ~~~ Variables - constants ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #define BAUDRATE 9600	// 115200
 
-#define SIM900checkSignal "AT+CSQ"
-#define SIM900simInfo "AT+CCID"
+// SIM connection info
+// 0,1	--> connected
+// 0,2	--> not connected, searching
+// 0,4	--> unknown connection state
+// 0,5	--> connected, roaming
 #define SIM900checkNetReg "AT+CREG?"
+
+// Signal quality in dB: [0-31] (higher: better)
+#define SIM900checkSignal "AT+CSQ"
+
+// SIM card number
+#define SIM900simInfo "AT+CCID"
+
+// Check if modem is ready
+#define SIM900isReady "AT+CPIN?"
+
+// Board info
+#define SIM900boardInfo "ATI"
+
+// Check if internet is connected
+#define SIM900internet "AT+COPS?"
+
+// Operators available in the network
+#define SIM900operators "AT+COPS=?"
+
+// Check battery level (2nd num: bat % , 3rd num: voltage in mV)
+#define SIM900battery "AT+CBC"
+
+// List UNREAD SMS
+#define SIM900unreadSMS "AT+CMGL=\"REC UNREAD\""
+
+// List READ SMS
+#define SIM900readSMS "AT+CMGL=\"REC READ\""
+
+// Delete ALL READ SMSs
+#define SIM900delRead "AT+CMGD=1,1"
+
+// Delete ALL SMSs
+#define SIM900delAll "AT+CMGD=1,4"
 
 const char* thingSpeakServer  = "api.thingspeak.com"; 	// 184.106.153.149
 char apiKey[] = THINGSP_WR_APIKEY;						// API key w/ write access
@@ -141,6 +177,12 @@ void setup() {
 	scale.tare();
 	Serial.println("Scale initiated and calibrated.\n\r");
 	delay(100);
+
+	Serial.println("Configuring SIM900 ...");
+	// // Inform for new SMS w/ index number (default)
+	// mySerialGSM.println("AT+CNMI=2,1,0,0,0");
+	// // Forward new SMS to Serial monitor
+	// mySerialGSM.println("AT+CNMI=2,2,0,0,0");
 }
 
 
@@ -170,30 +212,20 @@ void loop() {
 	}
 
 
-	// if (mySerialGSM.available()) {
-	// 	SMS_command = readSMS();
-	// 	Serial.print("SMS_command (return): ");
-	// 	Serial.println(SMS_command);
-	// }
-
-
-	if (currentMillis % 15000 == 0) {
-		Serial.println("");
+	if (currentMillis % smsInterv == 0) {
+		//Serial.println("");
 		// SMS_command = readSMS();
 
-		getMeasurements();
+		//getMeasurements();
 
+
+		// SIM900checkNetReg  SIM900simInfo  SIM900checkSignal
 		// Serial.println("");
-		// mySerialGSM.println(String(SIM900checkSignal));
+		// mySerialGSM.println(SIM900simInfo);
 		// delay(1000);
 
-		// Serial.println("");
-		// mySerialGSM.println(String(SIM900simInfo));
-		// delay(1000);
 
-		Serial.println("");
-		mySerialGSM.println(String(SIM900checkNetReg));
-		delay(1000);
+
 		// ShowSerialDataGSM();
 
 		// SMS_command = gprs.isSMSunread();
@@ -434,7 +466,24 @@ void sendSMS() {
 	Serial.println("Sending SMS message ...");
 
 	digitalWrite(ESPLED, LOW);
-	gprs.sendSMS(SMS_phone, &beeHiveMessage);
+
+	// gprs.sendSMS(SMS_phone, &beeHiveMessage);
+
+	// Configuring TEXT mode
+	mySerialGSM.println("AT+CMGF=1");
+	updateSerial();
+	mySerialGSM.print("AT+CMGS=\"");
+	// mySerialGSM.print(String(SMS_phone));
+	mySerialGSM.print("+306974240700");
+	mySerialGSM.println("\"");
+	// mySerialGSM.println("AT+CMGS=\"+306974240700\"");
+	updateSerial();
+	// SMS content
+	mySerialGSM.print("PTYXIO");
+	updateSerial();
+	// Ctrl+Z character
+	mySerialGSM.write(26);
+
 	digitalWrite(ESPLED, HIGH);
 }
 
@@ -593,3 +642,14 @@ void ShowSerialDataGSM() {
 // 	Serial.write(mySerialESP.read());
 //   }
 // }
+void updateSerial() {
+	delay(500);
+	while (Serial.available()) 
+	{
+		mySerialGSM.write(Serial.read());//Forward what Serial received to Software Serial Port
+	}
+	while(mySerialGSM.available()) 
+	{
+		Serial.write(mySerialGSM.read());//Forward what Software Serial received to Serial Port
+	}
+}
