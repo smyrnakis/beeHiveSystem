@@ -193,6 +193,7 @@ void loop() {
 
   	currentMillis = millis();
 
+
 	// Send to serial whatever SIM900 says
 	mySerialGSM.begin(BAUDRATE);
 	delay(10);
@@ -201,19 +202,11 @@ void loop() {
 		// delay(10);
 		String readString;
 		while (mySerialGSM.available()) {
-			readString = mySerialGSM.readString();
+			inboundSerialGSM = mySerialGSM.readString();
 		}
-
-		Serial.println(readString);
-		// if(readString.indexOf("OK") > 0) {
-		// 	Serial.println("OK found !!!\r\n");
-		// }
-		// else {
-		// 	Serial.println(readString);
-		// }
+		Serial.println(inboundSerialGSM);
 	}
 	mySerialGSM.end();
-
 
 	// Send to serial whatever ESP8266 says
 	mySerialESP.begin(BAUDRATE);
@@ -223,19 +216,15 @@ void loop() {
 		// delay(10);
 		String readString;
 		while (mySerialESP.available()) {
-			readString = mySerialESP.readString();
+			// inboundSerialESP = mySerialESP.readString();
+			inboundSerialESP = mySerialESP.readStringUntil('\r\n');
 		}
-
-		Serial.println(readString);
-		// if(readString.indexOf("OK") > 0) {
-		// 	Serial.println("OK found !!!\r\n");
-		// }
-		// else {
-		// 	Serial.println(readString);
+		Serial.println(inboundSerialESP);
+		// if ((String(inboundSerialESP)).indexOf('report') > 0) {
+		// 	Serial.println("Report requested!\r\n");
 		// }
 	}
 	mySerialESP.end();
-
 
 	// Send to SIM900 whatever we send in serial
 	if (Serial.available()) {
@@ -346,7 +335,8 @@ void loop() {
 		}
 	}
 	
-	// delay(10);	// to check if needed or not!
+	inboundSerialESP = '\0';
+	inboundSerialGSM = '\0';
 }
 
 
