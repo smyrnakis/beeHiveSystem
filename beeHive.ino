@@ -26,7 +26,7 @@
 
 
 // ~~~ Variables - constants ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#define BAUDRATE 9600	// 115200
+#define BAUDRATE 9600
 
 // SIM connection info
 // 0,1	--> connected
@@ -140,8 +140,7 @@ void setup() {
 	Serial.println("Serial enabled.\n\r");
 	delay(100);
 
-	short gprsInitTimeout = 30; 						// 60 seconds timeout
-
+	short gprsInitTimeout = 30;
 	Serial.print("Initialising GPRS...");
 	gprs.init();
 
@@ -151,7 +150,6 @@ void setup() {
 		Serial.print(".");
 		gprs.init();
  	}
-  	
 	if (gprs.checkPowerUp()) {
 		Serial.println(" done\n\r");
 	}
@@ -179,32 +177,40 @@ void setup() {
 	delay(100);
 
 	Serial.print("Configuring SIM900 ...");
-	// // Inform for new SMS w/ index number (default)
+	mySerialGSM.begin(BAUDRATE);
+	delay(5);
+	// Inform for new SMS w/ index number (default)
 	// mySerialGSM.println("AT+CNMI=2,1,0,0,0");
-	// // Forward new SMS to Serial monitor
-	// mySerialGSM.println("AT+CNMI=2,2,0,0,0");
+	// Forward new SMS to Serial monitor
+	mySerialGSM.println("AT+CNMI=2,2,0,0,0");
+	mySerialGSM.end();
 	Serial.println(" done\n\r");
-
+	delay(100);
 }
 
 
 // ~~~ Main loop ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void loop() {
-
   	currentMillis = millis();
-
 
 	// Send to serial whatever SIM900 says
 	mySerialGSM.begin(BAUDRATE);
 	delay(10);
 	mySerialGSM.listen();
 	if (mySerialGSM.available()) {
-		// delay(10);
-		String readString;
+		// String readString;
 		while (mySerialGSM.available()) {
 			inboundSerialGSM = mySerialGSM.readString();
+			// readString = mySerialGSM.readString();
+			// inboundSerialGSM = mySerialGSM.readStringUntil('\r\n');
 		}
+		Serial.println("GSM >>>> ");
 		Serial.println(inboundSerialGSM);
+		// Serial.println(readString);
+		// inboundSerialGSM = readString;			// <?<>?<?><?><?><?><?><?><?>
+	}
+	else {
+		inboundSerialGSM = '\r\n\0';
 	}
 	mySerialGSM.end();
 
@@ -213,20 +219,26 @@ void loop() {
 	delay(10);
 	mySerialESP.listen();
 	if (mySerialESP.available()) {
-		// delay(10);
-		String readString;
+		// String readString;
 		while (mySerialESP.available()) {
-			// inboundSerialESP = mySerialESP.readString();
-			inboundSerialESP = mySerialESP.readStringUntil('\r\n');
+			inboundSerialESP = mySerialESP.readString();
+			// readString = mySerialESP.readString();
+			// inboundSerialESP = mySerialESP.readStringUntil('\r\n');
 		}
+		Serial.println("ESP >>>> ");
 		Serial.println(inboundSerialESP);
+		// Serial.println(readString);
 		// if ((String(inboundSerialESP)).indexOf('report') > 0) {
 		// 	Serial.println("Report requested!\r\n");
 		// }
 	}
+	else {
+		inboundSerialESP = '\r\n\0';
+	}
 	mySerialESP.end();
 
-	// Send to SIM900 whatever we send in serial
+	// Send to devices whatever we send in serial
+	// delay(10);
 	if (Serial.available()) {
 		delay(10);
 		String cmd = "";
@@ -247,6 +259,15 @@ void loop() {
 			mySerialESP.print(cmd);
 			mySerialESP.end();
 		}
+	}
+
+
+	if (inboundSerialGSM.indexOf('report') > 0) {
+		// Serial.println("User requested a report by SMS!\r\n");
+		getMeasurements();
+	}
+	if (inboundSerialESP.indexOf('wifi') > 0) {
+		Serial.println("ESP has WiFi!\r\n");
 	}
 
 
@@ -334,9 +355,10 @@ void loop() {
 			Send2ThingSpeakGPRS();
 		}
 	}
-	
-	inboundSerialESP = '\0';
-	inboundSerialGSM = '\0';
+
+	// inboundSerialESP = '\0';
+	// inboundSerialGSM = '\0';
+	// delay(1);
 }
 
 
