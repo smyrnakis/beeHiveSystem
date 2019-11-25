@@ -21,8 +21,8 @@
 
 #define PIN_TX_GSM 7	// 5	// yellow cable
 #define PIN_RX_GSM 8	// 6	// green cable
-#define PIN_TX_ESP 12
-#define PIN_RX_ESP 13
+#define PIN_TX_ESP 11
+#define PIN_RX_ESP 12
 
 
 // ~~~ Variables - constants ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -107,6 +107,10 @@ const char* smsUploadCancel = "autocancel";				// --> cancel auto upload
 
 char beeHiveMessage; 									// Contents of outgoing SMS message
 
+String inboundSerialESP;								// Used for communication across devices
+String inboundSerialGSM;
+String outboundSerialESP;
+String outboundSerialGSM;
 
 // ~~~ WiFi data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~	// NOT NEEDED WITH WiFi Manager lib
 // char ssid[]              = TOLIS_MOBILE_SSID;
@@ -115,11 +119,10 @@ char beeHiveMessage; 									// Contents of outgoing SMS message
 
 // ~~~ Initialising ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 DHT dht(DHTPIN, DHT11);
-// DHT dht(DHTPIN, DHT11, 15);
 HX711 scale;
 
 SoftwareSerial mySerialGSM(PIN_TX_GSM,PIN_RX_GSM);
-// SoftwareSerial mySerialESP(PIN_TX_ESP,PIN_RX_ESP);
+SoftwareSerial mySerialESP(PIN_TX_ESP,PIN_RX_ESP);
 
 GPRS gprs(PIN_TX_GSM,PIN_RX_GSM,BAUDRATE);
 
@@ -157,11 +160,11 @@ void setup() {
 	}
 	delay(100);
 
-	Serial.print("Initialising Software Serials ...");
-	mySerialGSM.begin(BAUDRATE);
-	// mySerialESP.begin(BAUDRATE);		// 115200	19200
-	Serial.println(" done\n\r");
-	delay(100);
+	// Serial.print("Initialising Software Serials ...");
+	// mySerialGSM.begin(BAUDRATE);
+	// mySerialESP.begin(BAUDRATE);
+	// Serial.println(" done\n\r");
+	// delay(100);
 
 	Serial.print("Initialising DHT ...");
 	dht.begin();
@@ -181,6 +184,7 @@ void setup() {
 	// // Forward new SMS to Serial monitor
 	// mySerialGSM.println("AT+CNMI=2,2,0,0,0");
 	Serial.println(" done\n\r");
+
 }
 
 
@@ -189,32 +193,50 @@ void loop() {
 
   	currentMillis = millis();
 
+	// Send to serial whatever SIM900 says
+	mySerialGSM.begin(BAUDRATE);
+	delay(10);
+	mySerialGSM.listen();
 	if (mySerialGSM.available()) {
+		// delay(10);
 		String readString;
 		while (mySerialGSM.available()) {
 			readString = mySerialGSM.readString();
 		}
 
-		// Serial.println(readString);
-		if(readString.indexOf("OK") > 0) {
-			Serial.println("OK found !!!\r\n");
-		}
-		else {
-			Serial.println(readString);
+		Serial.println(readString);
+		// if(readString.indexOf("OK") > 0) {
+		// 	Serial.println("OK found !!!\r\n");
+		// }
+		// else {
+		// 	Serial.println(readString);
+		// }
+	}
+	mySerialGSM.end();
+
+
+	// Send to serial whatever ESP8266 says
+	mySerialESP.begin(BAUDRATE);
+	delay(10);
+	mySerialESP.listen();
+	if (mySerialESP.available()) {
+		// delay(10);
+		String readString;
+		while (mySerialESP.available()) {
+			readString = mySerialESP.readString();
 		}
 
-		// Serial.print("Just spamming: ");
-		// Serial.println(readString);
-		// Serial.println("\r\n");
+		Serial.println(readString);
+		// if(readString.indexOf("OK") > 0) {
+		// 	Serial.println("OK found !!!\r\n");
+		// }
+		// else {
+		// 	Serial.println(readString);
+		// }
 	}
-	
-	// // Print in serial whatever SIM900 says
-	// if (mySerialGSM.available()) {
-	// 	while (mySerialGSM.available()) {
-	// 		int c = mySerialGSM.read();
-	// 		Serial.write((char)c);
-	// 	}
-	// }
+	mySerialESP.end();
+
+
 	// Send to SIM900 whatever we send in serial
 	if (Serial.available()) {
 		delay(10);
@@ -225,7 +247,17 @@ void loop() {
 		Serial.println();
     	Serial.print(">>>> ");
     	Serial.println(cmd);
-		mySerialGSM.print(cmd);
+
+		if (cmd.indexOf('AT') > 0) {
+			mySerialGSM.begin(BAUDRATE);
+			mySerialGSM.print(cmd);
+			mySerialGSM.end();
+		}
+		else {
+			mySerialESP.begin(BAUDRATE);
+			mySerialESP.print(cmd);
+			mySerialESP.end();
+		}
 	}
 
 
@@ -546,7 +578,8 @@ void Send2ThingSpeakGPRS() {
 	digitalWrite(ESPLED, LOW);
 
 	mySerialGSM.println("AT+CBAND=\"EGSM_DCS_MODE\"");
-	if (printInSerial) { ShowSerialDataGSM(); }
+	// if (printInSerial) { ShowSerialDataGSM(); }
+	if (printInSerial) { updateSerial(); }
 	delay(200);
 
 	//mySerialGSM.println("AT+IPR=9600");
@@ -554,42 +587,50 @@ void Send2ThingSpeakGPRS() {
 	//delay(100);
 	
 	mySerialGSM.println("AT");
-	if (printInSerial) { ShowSerialDataGSM(); }
+	// if (printInSerial) { ShowSerialDataGSM(); }
+	if (printInSerial) { updateSerial(); }
 	delay(200);
 
 	mySerialGSM.println("AT+CREG?");
-	if (printInSerial) { ShowSerialDataGSM(); }
+	// if (printInSerial) { ShowSerialDataGSM(); }
+	if (printInSerial) { updateSerial(); }
 	delay(200);
 
 	//Set the connection type to GPRS	
 	mySerialGSM.println("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"");
-	if (printInSerial) { ShowSerialDataGSM(); }
+	// if (printInSerial) { ShowSerialDataGSM(); }
+	if (printInSerial) { updateSerial(); }
 	delay(500);
 
 	//APN Vodafone: 'internet.vodafone.gr'. APN Cosmote: 'internet', APN Q: myq
 	// https://wiki.apnchanger.org/Greece
 	mySerialGSM.println("AT+SAPBR=3,1,\"APN\",\"myq\"");
-	if (printInSerial) { ShowSerialDataGSM(); }
+	// if (printInSerial) { ShowSerialDataGSM(); }
+	if (printInSerial) { updateSerial(); }
 	delay(500);
 
 	//Enable the GPRS
 	mySerialGSM.println("AT+SAPBR=1,1");
-	if (printInSerial) { ShowSerialDataGSM(); }
+	// if (printInSerial) { ShowSerialDataGSM(); }
+	if (printInSerial) { updateSerial(); }
 	delay(3000);
 
 	//Query if the connection is setup properly, if we get back a IP address then we can proceed
 	mySerialGSM.println("AT+SAPBR=2,1");
-	if (printInSerial) { ShowSerialDataGSM(); }
+	// if (printInSerial) { ShowSerialDataGSM(); }
+	if (printInSerial) { updateSerial(); }
 	delay(500);
 
 	//We were allocated a IP address and now we can proceed by enabling the HTTP mode
 	mySerialGSM.println("AT+HTTPINIT");
-	if (printInSerial) { ShowSerialDataGSM(); }
+	// if (printInSerial) { ShowSerialDataGSM(); }
+	if (printInSerial) { updateSerial(); }
 	delay(500);
 	
 	//Start by setting up the HTTP bearer profile identifier
 	mySerialGSM.println("AT+HTTPPARA=\"CID\",1");
-	if (printInSerial) { ShowSerialDataGSM(); }
+	// if (printInSerial) { ShowSerialDataGSM(); }
+	if (printInSerial) { updateSerial(); }
 	delay(500);
 	
 	//Setting up the url to the 'thingspeak.com' address 
@@ -605,17 +646,20 @@ void Send2ThingSpeakGPRS() {
 	tempCall += "\"";
 	mySerialGSM.println(tempCall);
 	//mySerialGSM.println("AT+HTTPPARA=\"URL\",\"http://api.thingspeak.com/update?api_key=THINGSP_WR_APIKEY&field1=22&field2=15&field3=10\"");
-	if (printInSerial) { ShowSerialDataGSM(); }
+	// if (printInSerial) { ShowSerialDataGSM(); }
+	if (printInSerial) { updateSerial(); }
 	delay(500);
 	
 	//Start the HTTP GET session
 	mySerialGSM.println("AT+HTTPACTION=0");
-	if (printInSerial) { ShowSerialDataGSM(); }
+	// if (printInSerial) { ShowSerialDataGSM(); }
+	if (printInSerial) { updateSerial(); }
 	delay(500);
 	
 	//end of data sending
 	mySerialGSM.println("AT+HTTPREAD");
-	if (printInSerial) { ShowSerialDataGSM(); }
+	// if (printInSerial) { ShowSerialDataGSM(); }
+	if (printInSerial) { updateSerial(); }
 	delay(100);
 	digitalWrite(ESPLED, HIGH);
 }
@@ -647,13 +691,13 @@ void serialPrintAll() {
 }
 
 // ~~~ Print SW serial into HW ~~~~~~~~~~~~~~~~~~~~~~~~~~~
-void ShowSerialDataGSM() {
-  while (mySerialGSM.available() != 0) {
-	Serial.write(mySerialGSM.read());
-	// int c = mySerialGSM.read();
-    // Serial.write((char)c);
-  }
-}
+// void ShowSerialDataGSM() {
+//   while (mySerialGSM.available() != 0) {
+// 	Serial.write(mySerialGSM.read());
+// 	// int c = mySerialGSM.read();
+//     // Serial.write((char)c);
+//   }
+// }
 // void ShowSerialDataESP() {
 //   while (mySerialESP.available() != 0) {
 // 	Serial.write(mySerialESP.read());
@@ -661,12 +705,13 @@ void ShowSerialDataGSM() {
 // }
 void updateSerial() {
 	delay(500);
-	while (Serial.available()) 
-	{
-		mySerialGSM.write(Serial.read());//Forward what Serial received to Software Serial Port
+	while (Serial.available()) {
+		mySerialGSM.write(Serial.read());
 	}
-	while(mySerialGSM.available()) 
-	{
-		Serial.write(mySerialGSM.read());//Forward what Software Serial received to Serial Port
+	while(mySerialGSM.available()) {
+		Serial.write(mySerialGSM.read());
+	}
+	while(mySerialESP.available()) {
+		Serial.write(mySerialESP.read());
 	}
 }
