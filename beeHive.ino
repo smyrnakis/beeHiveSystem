@@ -1,4 +1,4 @@
-#include <ESP8266WiFi.h>
+// #include <ESP8266WiFi.h>
 #include <SoftwareSerial.h>
 
 #include <GPRS_Shield_Arduino.h>
@@ -33,6 +33,10 @@
 
 // ~~~ Variables - constants ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #define BAUDRATE 9600	// 115200
+
+#define SIM900checkSignal "AT+CSQ"
+#define SIM900simInfo "AT+CCID"
+#define SIM900checkNetReg "AT+CREG?"
 
 const char* thingSpeakServer  = "api.thingspeak.com"; 	// 184.106.153.149
 char apiKey[] = THINGSP_WR_APIKEY;						// API key w/ write access
@@ -85,7 +89,7 @@ DHT dht(DHTPIN, DHT11);
 HX711 scale;
 
 SoftwareSerial mySerialGSM(PIN_TX_GSM,PIN_RX_GSM);
-SoftwareSerial mySerialESP(PIN_TX_ESP,PIN_RX_ESP);
+// SoftwareSerial mySerialESP(PIN_TX_ESP,PIN_RX_ESP);
 
 GPRS gprs(PIN_TX_GSM,PIN_RX_GSM,BAUDRATE);
 
@@ -97,11 +101,10 @@ void setup() {
 	pinMode(ESPLED, OUTPUT);
 
 	digitalWrite(PCBLED, HIGH);		// turning LEDs OFF
-  	digitalWrite(ESPLED, HIGH);
-
-	randomSeed(analogRead(0));
+	digitalWrite(ESPLED, HIGH);
 
 	Serial.begin(BAUDRATE);			// starting serial
+	Serial.println("Serial enabled.\n\r");
 	delay(100);
 
 	short gprsInitTimeout = 30; 						// 60 seconds timeout
@@ -125,19 +128,19 @@ void setup() {
 	delay(100);
 
 	mySerialGSM.begin(BAUDRATE);
-	mySerialESP.begin(BAUDRATE);
+	// mySerialESP.begin(BAUDRATE);		// 115200	19200
 	Serial.println("Software serials enabled.\n\r");
 	delay(100);
 
 	dht.begin();
 	Serial.println("DHT initiated.\n\r");
-	delay(10);
+	delay(100);
 
 	scale.begin(HX711_DAT, HX711_CLK);
 	scale.set_scale(-101800);
 	scale.tare();
 	Serial.println("Scale initiated and calibrated.\n\r");
-	delay(10);
+	delay(100);
 }
 
 
@@ -146,12 +149,61 @@ void loop() {
 
   	currentMillis = millis();
 
-	// checking for SMS
-	if (currentMillis % smsInterv == 0) {
-		SMS_command = readSMS();
-		Serial.print("SMS_command (return): ");
-		Serial.println(SMS_command);
+	// Print in serial whatever SIM900 says
+	if (mySerialGSM.available()) {
+		while (mySerialGSM.available()) {
+			int c = mySerialGSM.read();
+			Serial.write((char)c);
+		}
 	}
+	// Send to SIM900 whatever we send in serial
+	if (Serial.available()) {
+		delay(10);
+		String cmd = "";
+		while (Serial.available()) {
+			cmd += (char)Serial.read();
+		}
+		Serial.println();
+    	Serial.print(">>>> ");
+    	Serial.println(cmd);
+		mySerialGSM.print(cmd);
+	}
+
+
+	// if (mySerialGSM.available()) {
+	// 	SMS_command = readSMS();
+	// 	Serial.print("SMS_command (return): ");
+	// 	Serial.println(SMS_command);
+	// }
+
+
+	if (currentMillis % 15000 == 0) {
+		Serial.println("");
+		// SMS_command = readSMS();
+
+		getMeasurements();
+
+		// Serial.println("");
+		// mySerialGSM.println(String(SIM900checkSignal));
+		// delay(1000);
+
+		// Serial.println("");
+		// mySerialGSM.println(String(SIM900simInfo));
+		// delay(1000);
+
+		Serial.println("");
+		mySerialGSM.println(String(SIM900checkNetReg));
+		delay(1000);
+		// ShowSerialDataGSM();
+
+		// SMS_command = gprs.isSMSunread();
+
+		// Serial.print("SMS_command (return): ");
+		// Serial.println(SMS_command);
+		// Serial.println("");
+	}
+
+	// SMS_command = -1;
 
 	switch (SMS_command) {
 		case -2:							// Invalid SMS content
@@ -187,11 +239,11 @@ void loop() {
 		break;
 	}
 
-	if (currentMillis % 2500 == 0) {
-		Serial.println("");
-		getMeasurements();
-		Serial.println("");
-	}
+	// if (currentMillis % 5000 == 0) {
+	// 	Serial.println("");
+	// 	getMeasurements();
+	// 	Serial.println("");
+	// }
 
 	if (
 		(uploadInterval != 0) && 
@@ -219,7 +271,7 @@ void loop() {
 
 // ~~~ Getting sensor data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void getMeasurements() {
-	digitalWrite(PCBLED, LOW);
+	digitalWrite(PCBLED, HIGH);
 	// reset values
 	temperature = 0;
 	humidity = 0;
@@ -231,9 +283,7 @@ void getMeasurements() {
 	delay(50);
 	humidity = dht.readHumidity();
 	delay(50);
-	// temperature = random(18, 24);
-	// humidity = random(29, 36);
-	weight = std::abs(scale.get_units(10));
+	weight = fabs(scale.get_units(10));
 	delay(50);
 
 
@@ -289,15 +339,15 @@ void getMeasurements() {
 	}
 
 	beeHiveMessage += '\0';
-	digitalWrite(PCBLED, HIGH);
+	digitalWrite(PCBLED, LOW);
 }
 
 
 // ~~~ Checking / Reading SMS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 int readSMS() {
-	digitalWrite(ESPLED, LOW);
+	digitalWrite(ESPLED, HIGH);
 	int returnValue = -2;
-    short messageIndex = gprs.isSMSunread();
+    int messageIndex = gprs.isSMSunread();
 
     Serial.print("Checked for unread SMS (index): "); 
     Serial.println(messageIndex);
@@ -374,7 +424,7 @@ int readSMS() {
 			// Serial.println("Just checked again for unread SMS"); 
 		}
 	}
-	digitalWrite(ESPLED, HIGH);
+	digitalWrite(ESPLED, LOW);
 	return returnValue;
 }
 
@@ -430,49 +480,50 @@ void Send2ThingSpeakGPRS() {
 	digitalWrite(ESPLED, LOW);
 
 	mySerialGSM.println("AT+CBAND=\"EGSM_DCS_MODE\"");
-	if (printInSerial) { ShowSerialData(); }
+	if (printInSerial) { ShowSerialDataGSM(); }
 	delay(200);
 
 	//mySerialGSM.println("AT+IPR=9600");
-	//if (printInSerial) { ShowSerialData(); }
+	//if (printInSerial) { ShowSerialDataGSM(); }
 	//delay(100);
 	
 	mySerialGSM.println("AT");
-	if (printInSerial) { ShowSerialData(); }
+	if (printInSerial) { ShowSerialDataGSM(); }
 	delay(200);
 
 	mySerialGSM.println("AT+CREG?");
-	if (printInSerial) { ShowSerialData(); }
+	if (printInSerial) { ShowSerialDataGSM(); }
 	delay(200);
 
 	//Set the connection type to GPRS	
 	mySerialGSM.println("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"");
-	if (printInSerial) { ShowSerialData(); }
+	if (printInSerial) { ShowSerialDataGSM(); }
 	delay(500);
 
-	//APN for Vodafone Greece --> 'internet.vodafone.gr'. APN For Cosmote Greece --> 'internet'
-	mySerialGSM.println("AT+SAPBR=3,1,\"APN\",\"internet.vodafone.gr\"");
-	if (printInSerial) { ShowSerialData(); }
+	//APN Vodafone: 'internet.vodafone.gr'. APN Cosmote: 'internet', APN Q: myq
+	// https://wiki.apnchanger.org/Greece
+	mySerialGSM.println("AT+SAPBR=3,1,\"APN\",\"myq\"");
+	if (printInSerial) { ShowSerialDataGSM(); }
 	delay(500);
 
 	//Enable the GPRS
 	mySerialGSM.println("AT+SAPBR=1,1");
-	if (printInSerial) { ShowSerialData(); }
+	if (printInSerial) { ShowSerialDataGSM(); }
 	delay(3000);
 
 	//Query if the connection is setup properly, if we get back a IP address then we can proceed
 	mySerialGSM.println("AT+SAPBR=2,1");
-	if (printInSerial) { ShowSerialData(); }
+	if (printInSerial) { ShowSerialDataGSM(); }
 	delay(500);
 
 	//We were allocated a IP address and now we can proceed by enabling the HTTP mode
 	mySerialGSM.println("AT+HTTPINIT");
-	if (printInSerial) { ShowSerialData(); }
+	if (printInSerial) { ShowSerialDataGSM(); }
 	delay(500);
 	
 	//Start by setting up the HTTP bearer profile identifier
 	mySerialGSM.println("AT+HTTPPARA=\"CID\",1");
-	if (printInSerial) { ShowSerialData(); }
+	if (printInSerial) { ShowSerialDataGSM(); }
 	delay(500);
 	
 	//Setting up the url to the 'thingspeak.com' address 
@@ -488,17 +539,17 @@ void Send2ThingSpeakGPRS() {
 	tempCall += "\"";
 	mySerialGSM.println(tempCall);
 	//mySerialGSM.println("AT+HTTPPARA=\"URL\",\"http://api.thingspeak.com/update?api_key=THINGSP_WR_APIKEY&field1=22&field2=15&field3=10\"");
-	if (printInSerial) { ShowSerialData(); }
+	if (printInSerial) { ShowSerialDataGSM(); }
 	delay(500);
 	
 	//Start the HTTP GET session
 	mySerialGSM.println("AT+HTTPACTION=0");
-	if (printInSerial) { ShowSerialData(); }
+	if (printInSerial) { ShowSerialDataGSM(); }
 	delay(500);
 	
 	//end of data sending
 	mySerialGSM.println("AT+HTTPREAD");
-	if (printInSerial) { ShowSerialData(); }
+	if (printInSerial) { ShowSerialDataGSM(); }
 	delay(100);
 	digitalWrite(ESPLED, HIGH);
 }
@@ -530,7 +581,15 @@ void serialPrintAll() {
 }
 
 // ~~~ Print SW serial into HW ~~~~~~~~~~~~~~~~~~~~~~~~~~~
-void ShowSerialData() {
-  while (mySerialGSM.available() != 0)
-    Serial.write(mySerialGSM.read());
+void ShowSerialDataGSM() {
+  while (mySerialGSM.available() != 0) {
+	Serial.write(mySerialGSM.read());
+	// int c = mySerialGSM.read();
+    // Serial.write((char)c);
+  }
 }
+// void ShowSerialDataESP() {
+//   while (mySerialESP.available() != 0) {
+// 	Serial.write(mySerialESP.read());
+//   }
+// }
