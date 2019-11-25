@@ -145,7 +145,7 @@ void setup() {
 
 	short gprsInitTimeout = 30; 						// 60 seconds timeout
 
-	Serial.print("Initializing GPRS...");
+	Serial.print("Initialising GPRS...");
 	gprs.init();
 
 	while((!gprs.checkPowerUp()) && (gprsInitTimeout > 0)) {
@@ -156,33 +156,37 @@ void setup() {
  	}
   	
 	if (gprs.checkPowerUp()) {
-		Serial.println(" done!\n\r");
+		Serial.println(" done\n\r");
 	}
 	else {
-		Serial.println(" failed!\n\r");
+		Serial.println(" failed\n\r");
 	}
 	delay(100);
 
+	Serial.print("Initialising Software Serials ...");
 	mySerialGSM.begin(BAUDRATE);
 	// mySerialESP.begin(BAUDRATE);		// 115200	19200
-	Serial.println("Software serials enabled.\n\r");
+	Serial.println(" done\n\r");
 	delay(100);
 
+	Serial.print("Initialising DHT ...");
 	dht.begin();
-	Serial.println("DHT initiated.\n\r");
+	Serial.println(" done\n\r");
 	delay(100);
 
+	Serial.print("Initialising scale ...");
 	scale.begin(HX711_DAT, HX711_CLK);
 	scale.set_scale(-101800);
 	scale.tare();
-	Serial.println("Scale initiated and calibrated.\n\r");
+	Serial.println(" done\n\r");
 	delay(100);
 
-	Serial.println("Configuring SIM900 ...");
+	Serial.print("Configuring SIM900 ...");
 	// // Inform for new SMS w/ index number (default)
 	// mySerialGSM.println("AT+CNMI=2,1,0,0,0");
 	// // Forward new SMS to Serial monitor
 	// mySerialGSM.println("AT+CNMI=2,2,0,0,0");
+	Serial.println(" done\n\r");
 }
 
 
@@ -191,13 +195,26 @@ void loop() {
 
   	currentMillis = millis();
 
-	// Print in serial whatever SIM900 says
 	if (mySerialGSM.available()) {
+		String readString;
 		while (mySerialGSM.available()) {
-			int c = mySerialGSM.read();
-			Serial.write((char)c);
+			readString = mySerialGSM.readString();
 		}
+
+		Serial.println(readString);
+
+		// Serial.print("Just spamming: ");
+		// Serial.println(readString);
+		// Serial.println("\r\n");
 	}
+	
+	// // Print in serial whatever SIM900 says
+	// if (mySerialGSM.available()) {
+	// 	while (mySerialGSM.available()) {
+	// 		int c = mySerialGSM.read();
+	// 		Serial.write((char)c);
+	// 	}
+	// }
 	// Send to SIM900 whatever we send in serial
 	if (Serial.available()) {
 		delay(10);
