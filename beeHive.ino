@@ -1,4 +1,3 @@
-// #include <ESP8266WiFi.h>
 #include <SoftwareSerial.h>
 
 #include <GPRS_Shield_Arduino.h>
@@ -6,11 +5,6 @@
 #include <HX711.h>
 #include <Wire.h>
 #include <DHT.h>
-
-// #include <WiFiEspClient.h>
-// #include <WiFiEsp.h>
-// #include <WiFiEspUdp.h>
-// #include <PubSubClient.h>
 
 #include "secrets.h"
 
@@ -27,8 +21,8 @@
 
 #define PIN_TX_GSM 7	// 5	// yellow cable
 #define PIN_RX_GSM 8	// 6	// green cable
-#define PIN_TX_ESP 10
-#define PIN_RX_ESP 11
+#define PIN_TX_ESP 12
+#define PIN_RX_ESP 13
 
 
 // ~~~ Variables - constants ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -201,7 +195,13 @@ void loop() {
 			readString = mySerialGSM.readString();
 		}
 
-		Serial.println(readString);
+		// Serial.println(readString);
+		if(readString.indexOf("OK") > 0) {
+			Serial.println("OK found !!!\r\n");
+		}
+		else {
+			Serial.println(readString);
+		}
 
 		// Serial.print("Just spamming: ");
 		// Serial.println(readString);
