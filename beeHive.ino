@@ -276,8 +276,7 @@ void loop() {
 		SMS_command = -1;
 	}
 
-	if (cmd.indexOf("upload") >= 0) {
-		// Serial.println("User requested to send data just once!\r\n");
+	if (cmd.indexOf(smsUpload) >= 0) {
 		getMeasurements();
 
 		dataToESP = String(temperature);
@@ -288,7 +287,60 @@ void loop() {
 		dataToESP += "\r\n";
 
 		mySerialESP.print(dataToESP);
-		// Serial.println(dataToESP);
+
+		cmd = "";
+		Serial.flush();
+		delay(100);
+	}
+
+	if (cmd.indexOf(smsReport) >= 0) {
+
+		SMS_command = 1000;
+
+		cmd = "";
+		Serial.flush();
+		delay(100);
+	}
+
+	if (cmd.indexOf(smsUploadCancel) >= 0) {
+
+		SMS_command = 0;
+
+		cmd = "";
+		Serial.flush();
+		delay(100);
+	}
+
+	if (cmd.indexOf(smsUpload30) >= 0) {
+
+		SMS_command = 30;
+
+		cmd = "";
+		Serial.flush();
+		delay(100);
+	}
+
+	if (cmd.indexOf(smsUpload45) >= 0) {
+
+		SMS_command = 45;
+
+		cmd = "";
+		Serial.flush();
+		delay(100);
+	}
+
+	if (cmd.indexOf(smsUpload90) >= 0) {
+
+		SMS_command = 90;
+
+		cmd = "";
+		Serial.flush();
+		delay(100);
+	}
+
+	if (cmd.indexOf(smsUpload120) >= 0) {
+
+		SMS_command = 120;
 
 		cmd = "";
 		Serial.flush();
@@ -547,7 +599,8 @@ void sendSMS() {
 	// 	Serial.write(mySerialGSM.read());
 	// }
 
-	mySerialGSM.println("AT + CMGS = \"+306957969271\"");
+	// mySerialGSM.println("AT + CMGS = \"+306957969271\"");
+	mySerialGSM.println("AT + CMGS = \"+306974240700\"");
 	delay(100);
 	// mySerialGSM.print("AT+CMGS=\"");
 	// // mySerialGSM.print(String(SMS_phone));
