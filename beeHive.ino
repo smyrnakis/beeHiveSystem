@@ -267,8 +267,8 @@ void loop() {
 	}
 
 
-	if ((inboundSerialGSM.indexOf("+306957969271") >= 0) || 
-	    (inboundSerialGSM.indexOf("+306974240700") >= 0)) {
+	if ((inboundSerialGSM.indexOf("+3069XXXXXXXX") >= 0) || 
+	    (inboundSerialGSM.indexOf("+3069XXXXXXXX") >= 0)) {
 		Serial.println("User requested a report by SMS!\r\n");
 		SMS_command = readSMS();
 	}
@@ -561,17 +561,17 @@ void sendSMS() {
 	// 	Serial.write(mySerialGSM.read());
 	// }
 
-	// mySerialGSM.println("AT + CMGS = \"+306957969271\"");
-	// mySerialGSM.println("AT + CMGS = \"+306974240700\"");
-	mySerialGSM.println("AT + CMGS = \"+306944553090\"");
+	// mySerialGSM.println("AT + CMGS = \"+3069XXXXXXXX\"");
+	// mySerialGSM.println("AT + CMGS = \"+3069XXXXXXXX\"");
+	mySerialGSM.println("AT + CMGS = \"+3069XXXXXXXX\"");
 
 	delay(100);
 	// mySerialGSM.print("AT+CMGS=\"");
 	// // mySerialGSM.print(String(SMS_phone));
-	// // mySerialGSM.print("+306974240700");
-	// mySerialGSM.print("+306957969271");
+	// // mySerialGSM.print("+3069XXXXXXXX");
+	// mySerialGSM.print("+3069XXXXXXXX");
 	// mySerialGSM.println("\"");
-	// mySerialGSM.println("AT+CMGS=\"+306974240700\"");
+	// mySerialGSM.println("AT+CMGS=\"+3069XXXXXXXX\"");
 	// while(mySerialGSM.available()) {
 	// 	Serial.write(mySerialGSM.read());
 	// }
