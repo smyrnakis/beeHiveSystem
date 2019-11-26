@@ -68,11 +68,9 @@
 // Delete ALL SMSs
 #define SIM900delAll "AT+CMGD=1,4"
 
+
 const char* thingSpeakServer  = "api.thingspeak.com"; 	// 184.106.153.149
 char apiKey[] = THINGSP_WR_APIKEY;						// API key w/ write access
-
-char defaultSSID[] = WIFI_DEFAULT_SSID;
-char defaultPASS[] = WIFI_DEFAULT_PASS;
 
 float temperature = 0.0;
 float humidity = 0.0;
@@ -80,6 +78,7 @@ float weight = 0.0;
 
 unsigned int uploadInterval   = 0;
 unsigned long currentMillis   = 0;
+unsigned long startMillis	  = 0;
 const unsigned int smsInterv  = 10000;
 const unsigned int seconds30  = 30000;
 const unsigned int seconds45  = 45000;
@@ -210,7 +209,7 @@ void loop() {
 		// inboundSerialGSM = readString;			// <?<>?<?><?><?><?><?><?><?>
 	}
 	else {
-		inboundSerialGSM = '\r\n\0';
+		inboundSerialGSM = "\r\n\0";
 	}
 	mySerialGSM.end();
 
@@ -233,7 +232,7 @@ void loop() {
 		// }
 	}
 	else {
-		inboundSerialESP = '\r\n\0';
+		inboundSerialESP = "\r\n\0";
 	}
 	mySerialESP.end();
 
@@ -262,28 +261,27 @@ void loop() {
 	}
 
 
-	if (inboundSerialGSM.indexOf('report') > 0) {
-		// Serial.println("User requested a report by SMS!\r\n");
-		getMeasurements();
+	if (inboundSerialGSM.indexOf('+CMT: "+306974240700",') > 0) {
+		Serial.println("User requested a report by SMS!\r\n");
+		// readSMS();
+		// getMeasurements();
+		// sendSMS();
 	}
-	if (inboundSerialESP.indexOf('wifi') > 0) {
-		Serial.println("ESP has WiFi!\r\n");
-	}
+	// if (inboundSerialESP.indexOf('wifi') > 0) {
+	// 	Serial.println("ESP has WiFi!\r\n");
+	// }
 
 
-	if (currentMillis % smsInterv == 0) {
+	// if (currentMillis % smsInterv == 0) {
 		//Serial.println("");
 		// SMS_command = readSMS();
 
 		//getMeasurements();
 
-
 		// SIM900checkNetReg  SIM900simInfo  SIM900checkSignal
 		// Serial.println("");
 		// mySerialGSM.println(SIM900simInfo);
 		// delay(1000);
-
-
 
 		// ShowSerialDataGSM();
 
@@ -292,7 +290,7 @@ void loop() {
 		// Serial.print("SMS_command (return): ");
 		// Serial.println(SMS_command);
 		// Serial.println("");
-	}
+	// }
 
 	// SMS_command = -1;
 
@@ -330,11 +328,23 @@ void loop() {
 		break;
 	}
 
-	// if (currentMillis % 5000 == 0) {
-	// 	Serial.println("");
-	// 	getMeasurements();
-	// 	Serial.println("");
-	// }
+	const unsigned long period = 30000;
+	//if (currentMillis % 30000 == 0) {
+	if (currentMillis - startMillis >= period) {
+		Serial.println("\r\n\r\nSending data to ESP ...");
+
+		getMeasurements();
+		
+		String dataToESP = String(temperature);
+		dataToESP += "&";
+		dataToESP += String(humidity);
+		dataToESP += "&";
+		dataToESP += String(weight);
+		dataToESP += "\r\n";
+
+		mySerialESP.print(dataToESP);
+		startMillis = currentMillis;
+	}
 
 	if (
 		(uploadInterval != 0) && 
@@ -349,7 +359,16 @@ void loop() {
 		getMeasurements();
 		if (!gprsMode)	// Sending data using WiFi
 		{
-			Send2ThingSpeakWiFi();
+			String dataToESP = String(temperature);
+			dataToESP += "&";
+			dataToESP += String(humidity);
+			dataToESP += "&";
+			dataToESP += String(weight);
+			dataToESP += "\r\n";
+
+			mySerialESP.print(dataToESP);
+
+			// Send2ThingSpeakWiFi();
 		} else			// Sending data using GPRS
 		{
 			Send2ThingSpeakGPRS();
@@ -526,26 +545,38 @@ int readSMS() {
 void sendSMS() {
 	Serial.println("Sending SMS message ...");
 
-	digitalWrite(ESPLED, LOW);
+	digitalWrite(ESPLED, HIGH);
 
 	// gprs.sendSMS(SMS_phone, &beeHiveMessage);
 
 	// Configuring TEXT mode
 	mySerialGSM.println("AT+CMGF=1");
-	updateSerial();
+	// updateSerial();
+	// while(mySerialGSM.available()) {
+	// 	Serial.write(mySerialGSM.read());
+	// }
+
 	mySerialGSM.print("AT+CMGS=\"");
 	// mySerialGSM.print(String(SMS_phone));
 	mySerialGSM.print("+306974240700");
 	mySerialGSM.println("\"");
 	// mySerialGSM.println("AT+CMGS=\"+306974240700\"");
-	updateSerial();
+	// updateSerial();
+	// while(mySerialGSM.available()) {
+	// 	Serial.write(mySerialGSM.read());
+	// }
+
 	// SMS content
-	mySerialGSM.print("PTYXIO");
-	updateSerial();
+	mySerialGSM.print(beeHiveMessage);
+	// updateSerial();
+	// while(mySerialGSM.available()) {
+	// 	Serial.write(mySerialGSM.read());
+	// }
+
 	// Ctrl+Z character
 	mySerialGSM.write(26);
 
-	digitalWrite(ESPLED, HIGH);
+	digitalWrite(ESPLED, LOW);
 }
 
 // ~~~ Thingspeak WiFi ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
