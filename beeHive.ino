@@ -78,8 +78,9 @@ int weight = 0;
 
 unsigned int uploadInterval   = 0;
 unsigned long currentMillis   = 0;
-unsigned long startMillis	  = 0;
+unsigned long startMillisTEMP = 0;
 unsigned long startMillisDeb  = 0;
+unsigned long startMillisInte = 0;
 const unsigned int smsInterv  = 10000;
 const unsigned int seconds30  = 30000;
 const unsigned int seconds45  = 45000;
@@ -110,6 +111,7 @@ char beeHiveMessage; 									// Contents of outgoing SMS message
 String dataToESP; 										// Content of data sent to ESP
 String dataToSMS;										// String with outgoing SMS text
 
+String cmd;
 String inboundSerialESP;								// Used for communication across devices
 String inboundSerialGSM;
 String outboundSerialESP;
@@ -243,7 +245,8 @@ void loop() {
 	// delay(10);
 	if (Serial.available()) {
 		delay(10);
-		String cmd = "";
+		// String cmd = "";
+		cmd = "";
 		while (Serial.available()) {
 			cmd += (char)Serial.read();
 		}
@@ -264,16 +267,34 @@ void loop() {
 	}
 
 
-	// 	if ((inboundSerialGSM.indexOf("+CMT: \"+306974240700\",") > 0) && allowSMS) {
-	if ((inboundSerialGSM.indexOf('+306957969271') > 0) && allowSMS) {
+	if ((inboundSerialGSM.indexOf("+306957969271") >= 0) || 
+	    (inboundSerialGSM.indexOf("+306974240700") >= 0)) {
 		Serial.println("User requested a report by SMS!\r\n");
-		// readSMS();
-		getMeasurements();
-		sendSMS();
+		SMS_command = readSMS();
 	}
-	// if (inboundSerialESP.indexOf('wifi') > 0) {
-	// 	Serial.println("ESP has WiFi!\r\n");
-	// }
+	else {
+		SMS_command = -1;
+	}
+
+	if (cmd.indexOf("upload") >= 0) {
+		// Serial.println("User requested to send data just once!\r\n");
+		getMeasurements();
+
+		dataToESP = String(temperature);
+		dataToESP += "&";
+		dataToESP += String(humidity);
+		dataToESP += "&";
+		dataToESP += String(weight);
+		dataToESP += "\r\n";
+
+		mySerialESP.print(dataToESP);
+		// Serial.println(dataToESP);
+
+		cmd = "";
+		Serial.flush();
+		delay(100);
+	}
+
 
 	switch (SMS_command) {
 		case -2:							// Invalid SMS content
@@ -301,27 +322,23 @@ void loop() {
 			uploadInterval = seconds120;
 		break;
 		case 1000:							// Reply with SMS
-			getMeasurements();
-			sendSMS();
+			if (allowSMS) {
+				allowSMS = false;
+				getMeasurements();
+				sendSMS();
+			}
 		break;
 		default:							// Invalid return code
 			Serial.println("WARNING: unexpected readSMS() reply!");
 		break;
 	}
 
-	
 
-	if (
-		(uploadInterval != 0) && 
-		(currentMillis % uploadInterval == 0)
-	) {
-
+	if (uploadInterval == 1) {
 		// Reset uploadInterval if request was to upload once
-		if (uploadInterval == 1) {
-			uploadInterval = 0;
-		}
+		uploadInterval = 0;
 
-		Serial.println("Recurring upload ...");
+		Serial.println("Uploading once (WiFi)...");
 
 		getMeasurements();
 		if (!gprsMode)	// Sending data using WiFi
@@ -334,11 +351,37 @@ void loop() {
 			dataToESP += "\r\n";
 
 			mySerialESP.print(dataToESP);
-			Serial.println(dataToESP);
+			// Serial.println(dataToESP);
 		} else
 		{
 			// Send2ThingSpeakGPRS();
-			Serial.println("Sending using GPRS ...");
+			Serial.println("Uploading once (GPRS) ...");
+		}
+
+	}
+	else if (
+		(uploadInterval != 0) && 
+		(currentMillis - startMillisInte >= uploadInterval)
+	) {
+
+		Serial.println("Recurring upload (WiFi) ...");
+
+		getMeasurements();
+		if (!gprsMode)	// Sending data using WiFi
+		{
+			dataToESP = String(temperature);
+			dataToESP += "&";
+			dataToESP += String(humidity);
+			dataToESP += "&";
+			dataToESP += String(weight);
+			dataToESP += "\r\n";
+
+			mySerialESP.print(dataToESP);
+			// Serial.println(dataToESP);
+		} else
+		{
+			// Send2ThingSpeakGPRS();
+			Serial.println("Recurring upload (GPRS) ...");
 		}
 	}
 
@@ -352,27 +395,27 @@ void loop() {
 
 
 
-	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	// TEMP STEP - DATA EVERY 30 sec
-	//if (currentMillis % 30000 == 0) {
-	if (currentMillis - startMillis >= 600000) {
-		Serial.println("\r\n\r\nSending data to ESP ...");
+	// // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	// // TEMP STEP - DATA EVERY 30 sec
+	// //if (currentMillis % 30000 == 0) {
+	// if (currentMillis - startMillisTEMP >= 300000) {
+	// 	Serial.println("\r\n\r\nSending data to ESP ...");
 
-		getMeasurements();
+	// 	getMeasurements();
 
-		dataToESP = String(temperature);
-		dataToESP += "&";
-		dataToESP += String(humidity);
-		dataToESP += "&";
-		dataToESP += String(weight);
-		dataToESP += "\r\n";
+	// 	dataToESP = String(temperature);
+	// 	dataToESP += "&";
+	// 	dataToESP += String(humidity);
+	// 	dataToESP += "&";
+	// 	dataToESP += String(weight);
+	// 	dataToESP += "\r\n";
 
-		// Serial.println(dataToESP);
-		mySerialESP.print(dataToESP);
+	// 	// Serial.println(dataToESP);
+	// 	mySerialESP.print(dataToESP);
 
-		startMillis = currentMillis;
-	}
-	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	// 	startMillisTEMP = currentMillis;
+	// }
+	// // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	// inboundSerialESP = '\0';
 	// inboundSerialGSM = '\0';
@@ -438,83 +481,43 @@ void getMeasurements() {
 int readSMS() {
 	digitalWrite(ESPLED, HIGH);
 	int returnValue = -2;
-    int messageIndex = gprs.isSMSunread();
 
-    Serial.print("Checked for unread SMS (index): "); 
-    Serial.println(messageIndex);
-    
-	// At least one unread SMS
-	if (messageIndex <= 0) {
-		// Serial.println("No unread SMS found.");
-		returnValue = -1;
+	if (inboundSerialGSM.indexOf(smsReport) >= 0) {
+		Serial.println("Requested SMS report ...");
+		returnValue = 1000;
+	}
+	else if (inboundSerialGSM.indexOf(smsUpload) >= 0) {
+		Serial.println("Requested to upload once ...");
+		returnValue = 1;
+	}
+	else if (inboundSerialGSM.indexOf(smsUpload30) >= 0) {
+		Serial.println("Requested to upload every 30 seconds ...");
+		returnValue = 30;
+	}
+	else if (inboundSerialGSM.indexOf(smsUpload45) >= 0) {
+		Serial.println("Requested to upload every 45 seconds ...");
+		returnValue = 45;
+	}
+	else if (inboundSerialGSM.indexOf(smsUpload90) >= 0) {
+		Serial.println("Requested to upload every 90 seconds ...");
+		returnValue = 90;
+	}
+	else if (inboundSerialGSM.indexOf(smsUpload120) >= 0) {
+		Serial.println("Requested to upload every 120 seconds ...");
+		returnValue = 120;
+	}
+	else if (inboundSerialGSM.indexOf(smsUploadCancel) >= 0) {
+		Serial.println("Requested to cancel auto upload.");
+		returnValue = 0;
 	}
 	else {
-		while (messageIndex > 0) {
-
-			Serial.print("Analysing SMS with index: "); 
-			Serial.println(messageIndex);
-
-			// Reading SMS
-			gprs.readSMS(messageIndex, SMS_message, MESSAGE_LENGTH, SMS_phone, SMS_datetime);
-
-			// Print SMS data
-			Serial.print("From number: ");
-			Serial.println(String(SMS_phone));  
-			Serial.print("Message Index: ");
-			Serial.println(String(messageIndex));        
-			Serial.print("Recieved Message: ");
-			Serial.println(String(SMS_message));
-			Serial.print("Timestamp: ");
-			Serial.println(String(SMS_datetime));
-
-			// If the substring is: smsReport OR smsUpload* [Cancel 30 45 90 120]
-			if (strstr(SMS_message, smsReport) != NULL) {
-				Serial.println("Requested SMS report ...");
-				returnValue = 1000;
-			}
-			else if (strstr(SMS_message, smsUpload) != NULL) {
-				Serial.println("Requested to upload once ...");
-				returnValue = 1;
-			}
-			else if (strstr(SMS_message, smsUpload30) != NULL) {
-				Serial.println("Requested to upload every 30 seconds ...");
-				returnValue = 30;
-			}
-			else if (strstr(SMS_message, smsUpload45) != NULL) 
-			{
-				Serial.println("Requested to upload every 45 seconds ...");
-				returnValue = 45;
-			}
-			else if (strstr(SMS_message, smsUpload90) != NULL) 
-			{
-				Serial.println("Requested to upload every 90 seconds ...");
-				returnValue = 90;
-			}
-			else if (strstr(SMS_message, smsUpload120) != NULL) 
-			{
-				Serial.println("Requested to upload every 120 seconds ...");
-				returnValue = 120;
-			}
-			else if (strstr(SMS_message, smsUploadCancel) != NULL) 
-			{
-				Serial.println("Requested to cancel auto upload.");
-				returnValue = 0;
-			}
-			else
-			{
-				Serial.println("Invalid SMS text.");
-				returnValue = -2;
-			}
-
-			// Memory of Vodafone SIM can store up to 30 SMS
-			// Deleting SMS
-			Serial.println("Deleting current SMS ...");
-			gprs.deleteSMS(messageIndex);
-
-			messageIndex = gprs.isSMSunread();
-			// Serial.println("Just checked again for unread SMS"); 
-		}
+		Serial.println("Invalid SMS text.");
+		returnValue = -2;
 	}
+
+	// delay(1000);
+	mySerialGSM.println(SIM900delAll);
+
 	digitalWrite(ESPLED, LOW);
 	return returnValue;
 }
@@ -566,13 +569,14 @@ void sendSMS() {
 	// }
 
 	// Ctrl+Z character
-	mySerialGSM.println((char)26);
+	// mySerialGSM.println((char)26);
+	mySerialGSM.write( 0x1a );
 	delay(100);
 	mySerialGSM.println();
 	delay(5000);
 
 	// delay(1000);
-	// mySerialGSM.println(SIM900delAll);
+	mySerialGSM.println(SIM900delAll);
 
 	digitalWrite(ESPLED, LOW);
 }
