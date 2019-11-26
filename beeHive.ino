@@ -107,6 +107,7 @@ const char* smsUpload120 	= "auto120";				// --> upload every 120 seconds
 const char* smsUploadCancel = "autocancel";				// --> cancel auto upload
 
 char beeHiveMessage; 									// Contents of outgoing SMS message
+String dataToESP; 										// Content of data sent to ESP
 
 String inboundSerialESP;								// Used for communication across devices
 String inboundSerialGSM;
@@ -269,8 +270,8 @@ void loop() {
 	if ((inboundSerialGSM.indexOf('+CMT: "+306974240700",') > 0) && allowSMS) {
 		Serial.println("User requested a report by SMS!\r\n");
 		// readSMS();
-		// getMeasurements();
-		// sendSMS();
+		getMeasurements();
+		sendSMS();
 	}
 	// if (inboundSerialESP.indexOf('wifi') > 0) {
 	// 	Serial.println("ESP has WiFi!\r\n");
@@ -357,12 +358,12 @@ void loop() {
 
 		getMeasurements();
 		
-		String dataToESP = String(temperature);
-		dataToESP += "&";
-		dataToESP += String(humidity);
-		dataToESP += "&";
-		dataToESP += String(weight);
-		dataToESP += "\r\n";
+		// String dataToESP = String(temperature);
+		// dataToESP += "&";
+		// dataToESP += String(humidity);
+		// dataToESP += "&";
+		// dataToESP += String(weight);
+		// dataToESP += "\r\n";
 
 		Serial.println(dataToESP);
 
@@ -384,7 +385,8 @@ void getMeasurements() {
 	// temperature = 0;
 	// humidity = 0;
 	// weight = 0;
-	beeHiveMessage = '\0';
+	// beeHiveMessage = '\0';
+	// dataToESP = '\0';
 
 	// read values
 	temperature = dht.readTemperature();
@@ -407,9 +409,11 @@ void getMeasurements() {
 		Serial.print("Temperature: ");
 		Serial.print(temperature);
 		Serial.println(" °C");
-		beeHiveMessage += 'Temp:   ';
+		beeHiveMessage = 'Temp:   ';
 		beeHiveMessage += (char)temperature;
 		beeHiveMessage += ' °C\r\n' ;
+		dataToESP = String(temperature);
+		dataToESP += "&";
 	}
 
 	if (isnan(humidity))
@@ -425,6 +429,8 @@ void getMeasurements() {
 		beeHiveMessage += 'Hum:   e ';
 		beeHiveMessage += (char)humidity;
 		beeHiveMessage += ' %\r\n';
+		dataToESP = String(humidity);
+		dataToESP += "&";
 	}
 
 	if (isnan(weight))
@@ -440,14 +446,20 @@ void getMeasurements() {
 		beeHiveMessage += 'Weight: ';
 		beeHiveMessage += (char)weight;
 		beeHiveMessage += ' kg\r\n';
+		dataToESP = String(weight);
+		dataToESP += "\r\n";
 	}
 
 	// When no sensor data
 	if ((temperature = -100) && (humidity = -100) && (weight = -100)) {
 		beeHiveMessage += 'Error reading sensors!';
+		Serial.println("Error reading sensors!");
 	}
 
 	beeHiveMessage += '\0';
+	Serial.println(beeHiveMessage);
+	Serial.println(dataToESP);
+
 	digitalWrite(PCBLED, LOW);
 }
 
