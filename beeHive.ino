@@ -108,15 +108,12 @@ const char* smsUploadCancel = "autocancel";				// --> cancel auto upload
 
 char beeHiveMessage; 									// Contents of outgoing SMS message
 String dataToESP; 										// Content of data sent to ESP
+String dataToSMS;										// String with outgoing SMS text
 
 String inboundSerialESP;								// Used for communication across devices
 String inboundSerialGSM;
 String outboundSerialESP;
 String outboundSerialGSM;
-
-// ~~~ WiFi data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~	// NOT NEEDED WITH WiFi Manager lib
-// char ssid[]              = TOLIS_MOBILE_SSID;
-// char password[]          = TOLIS_MOBILE_PASS;
 
 
 // ~~~ Initialising ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -267,7 +264,8 @@ void loop() {
 	}
 
 
-	if ((inboundSerialGSM.indexOf('+CMT: "+306974240700",') > 0) && allowSMS) {
+	// 	if ((inboundSerialGSM.indexOf("+CMT: \"+306974240700\",") > 0) && allowSMS) {
+	if ((inboundSerialGSM.indexOf('+306957969271') > 0) && allowSMS) {
 		Serial.println("User requested a report by SMS!\r\n");
 		// readSMS();
 		getMeasurements();
@@ -323,10 +321,12 @@ void loop() {
 			uploadInterval = 0;
 		}
 
+		Serial.println("Recurring upload ...");
+
 		getMeasurements();
 		if (!gprsMode)	// Sending data using WiFi
 		{
-			String dataToESP = String(temperature);
+			dataToESP = String(temperature);
 			dataToESP += "&";
 			dataToESP += String(humidity);
 			dataToESP += "&";
@@ -334,40 +334,42 @@ void loop() {
 			dataToESP += "\r\n";
 
 			mySerialESP.print(dataToESP);
-
-			// Send2ThingSpeakWiFi();
-		} else			// Sending data using GPRS
+			Serial.println(dataToESP);
+		} else
 		{
-			Send2ThingSpeakGPRS();
+			// Send2ThingSpeakGPRS();
+			Serial.println("Sending using GPRS ...");
 		}
 	}
 
 
-	// Debounce every 1 sec
+	// Debounce every 10 sec
 	if (currentMillis - startMillisDeb >= 10000) {
 		allowSMS = true;
 		// Serial.println("Debounce reset");
 		startMillisDeb = currentMillis;
 	}
 
+
+
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// TEMP STEP - DATA EVERY 30 sec
 	//if (currentMillis % 30000 == 0) {
-	if (currentMillis - startMillis >= 30000) {
+	if (currentMillis - startMillis >= 600000) {
 		Serial.println("\r\n\r\nSending data to ESP ...");
 
 		getMeasurements();
-		
-		// String dataToESP = String(temperature);
-		// dataToESP += "&";
-		// dataToESP += String(humidity);
-		// dataToESP += "&";
-		// dataToESP += String(weight);
-		// dataToESP += "\r\n";
 
-		Serial.println(dataToESP);
+		dataToESP = String(temperature);
+		dataToESP += "&";
+		dataToESP += String(humidity);
+		dataToESP += "&";
+		dataToESP += String(weight);
+		dataToESP += "\r\n";
 
+		// Serial.println(dataToESP);
 		mySerialESP.print(dataToESP);
+
 		startMillis = currentMillis;
 	}
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -381,12 +383,6 @@ void loop() {
 // ~~~ Getting sensor data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void getMeasurements() {
 	digitalWrite(PCBLED, HIGH);
-	// reset values
-	// temperature = 0;
-	// humidity = 0;
-	// weight = 0;
-	// beeHiveMessage = '\0';
-	// dataToESP = '\0';
 
 	// read values
 	temperature = dht.readTemperature();
@@ -399,66 +395,40 @@ void getMeasurements() {
 
 
 	// check values - build SMS text
-	if (isnan(temperature))
-	{
+	if (isnan(temperature)) {
 		Serial.println("Failed to read temperature sensor!");
 		temperature = -100;
 	}
-	else
-	{
+	else {
 		Serial.print("Temperature: ");
 		Serial.print(temperature);
 		Serial.println(" °C");
-		beeHiveMessage = 'Temp:   ';
-		beeHiveMessage += (char)temperature;
-		beeHiveMessage += ' °C\r\n' ;
-		dataToESP = String(temperature);
-		dataToESP += "&";
 	}
 
-	if (isnan(humidity))
-	{
+	if (isnan(humidity)) {
 		Serial.println("Failed to read humidity sensor!");
 		humidity = -100;
 	}
-	else
-	{
+	else {
 		Serial.print("Humidity: ");
 		Serial.print(humidity);
 		Serial.println(" %");
-		beeHiveMessage += 'Hum:   e ';
-		beeHiveMessage += (char)humidity;
-		beeHiveMessage += ' %\r\n';
-		dataToESP = String(humidity);
-		dataToESP += "&";
 	}
 
-	if (isnan(weight))
-	{
+	if (isnan(weight)) {
 		Serial.println("Failed to read weight sensor!");
 		weight = -100;
 	}
-	else
-	{
+	else {
 		Serial.print("Weight: ");
 		Serial.print(weight);
 		Serial.println(" kg");
-		beeHiveMessage += 'Weight: ';
-		beeHiveMessage += (char)weight;
-		beeHiveMessage += ' kg\r\n';
-		dataToESP = String(weight);
-		dataToESP += "\r\n";
 	}
 
 	// When no sensor data
-	if ((temperature = -100) && (humidity = -100) && (weight = -100)) {
-		beeHiveMessage += 'Error reading sensors!';
+	if ((temperature == -100) && (humidity == -100) && (weight == -100)) {
 		Serial.println("Error reading sensors!");
 	}
-
-	beeHiveMessage += '\0';
-	Serial.println(beeHiveMessage);
-	Serial.println(dataToESP);
 
 	digitalWrite(PCBLED, LOW);
 }
@@ -556,72 +526,55 @@ void sendSMS() {
 
 	digitalWrite(ESPLED, HIGH);
 
-	// gprs.sendSMS(SMS_phone, &beeHiveMessage);
+	dataToSMS = "Temp: ";
+	dataToSMS += String(temperature);
+	dataToSMS += "C\r\n";
+	dataToSMS += "Hum: ";
+	dataToSMS += String(humidity);
+	dataToSMS += "%\r\n";
+	dataToSMS += "Wei: ";
+	dataToSMS += String(weight);
+	dataToSMS += "kg\r\n";
+	// dataToSMS += "\0";
 
 	// Configuring TEXT mode
-	mySerialGSM.println("AT+CMGF=1");
-	// updateSerial();
+	mySerialGSM.print("AT+CMGF=1\r");
+	delay(100);
 	// while(mySerialGSM.available()) {
 	// 	Serial.write(mySerialGSM.read());
 	// }
 
-	mySerialGSM.print("AT+CMGS=\"");
-	// mySerialGSM.print(String(SMS_phone));
-	mySerialGSM.print("+306974240700");
-	mySerialGSM.println("\"");
+	mySerialGSM.println("AT + CMGS = \"+306957969271\"");
+	delay(100);
+	// mySerialGSM.print("AT+CMGS=\"");
+	// // mySerialGSM.print(String(SMS_phone));
+	// // mySerialGSM.print("+306974240700");
+	// mySerialGSM.print("+306957969271");
+	// mySerialGSM.println("\"");
 	// mySerialGSM.println("AT+CMGS=\"+306974240700\"");
-	// updateSerial();
 	// while(mySerialGSM.available()) {
 	// 	Serial.write(mySerialGSM.read());
 	// }
 
 	// SMS content
-	mySerialGSM.print(beeHiveMessage);
-	// updateSerial();
+	// mySerialGSM.print(beeHiveMessage);
+	// mySerialGSM.print(dataToSMS);
+	mySerialGSM.println("Hey there");
+	delay(100);
 	// while(mySerialGSM.available()) {
 	// 	Serial.write(mySerialGSM.read());
 	// }
 
 	// Ctrl+Z character
-	mySerialGSM.write(26);
+	mySerialGSM.println((char)26);
+	delay(100);
+	mySerialGSM.println();
+	delay(5000);
+
+	// delay(1000);
+	// mySerialGSM.println(SIM900delAll);
 
 	digitalWrite(ESPLED, LOW);
-}
-
-// ~~~ Thingspeak WiFi ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-void Send2ThingSpeakWiFi() {
-	digitalWrite(ESPLED, LOW);
-
-	// if (client.connect(thingSpeakServer,80)) { 
-	// 	Serial.println();
-	// 	Serial.println("Sending data to Thingspeak...");
-	// 	Serial.println();
-		
-	// 	String postStr = apiKey;
-	// 	postStr +="&field1=";
-	// 	postStr += String(temperature);
-	// 	postStr +="&field2=";
-	// 	postStr += String(humidity);
-	// 	postStr +="&field3=";
-	// 	postStr += String(weight);
-	// 	postStr += "\r\n\r\n";
-
-	// 	client.print("POST /update HTTP/1.1\n");
-	// 	client.print("Host: api.thingspeak.com\n");
-	// 	client.print("Connection: close\n");
-	// 	client.print("X-THINGSPEAKAPIKEY: " + (String)apiKey + "\n");
-	// 	client.print("Content-Type: application/x-www-form-urlencoded\n");
-	// 	client.print("Content-Length: ");
-	// 	client.print(postStr.length());
-	// 	client.print("\n\n");
-	// 	client.print(postStr);
-
-	// 	Serial.println("Data sent to Thingspeak succesfully.");
-		
-	// 	// curl -v --request POST --header "X-THINGSPEAKAPIKEY: THINGSP_WR_APIKEY" --data "field1=23&field2=70&field3=70" "http://api.thingspeak.com/update")
-	// }
-	// client.stop();
-	digitalWrite(ESPLED, HIGH);
 }
 
 
@@ -631,7 +584,6 @@ void Send2ThingSpeakGPRS() {
 
 	mySerialGSM.println("AT+CBAND=\"EGSM_DCS_MODE\"");
 	// if (printInSerial) { ShowSerialDataGSM(); }
-	if (printInSerial) { updateSerial(); }
 	delay(200);
 
 	//mySerialGSM.println("AT+IPR=9600");
@@ -640,49 +592,41 @@ void Send2ThingSpeakGPRS() {
 	
 	mySerialGSM.println("AT");
 	// if (printInSerial) { ShowSerialDataGSM(); }
-	if (printInSerial) { updateSerial(); }
 	delay(200);
 
 	mySerialGSM.println("AT+CREG?");
 	// if (printInSerial) { ShowSerialDataGSM(); }
-	if (printInSerial) { updateSerial(); }
 	delay(200);
 
 	//Set the connection type to GPRS	
 	mySerialGSM.println("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"");
 	// if (printInSerial) { ShowSerialDataGSM(); }
-	if (printInSerial) { updateSerial(); }
 	delay(500);
 
 	//APN Vodafone: 'internet.vodafone.gr'. APN Cosmote: 'internet', APN Q: myq
 	// https://wiki.apnchanger.org/Greece
 	mySerialGSM.println("AT+SAPBR=3,1,\"APN\",\"myq\"");
 	// if (printInSerial) { ShowSerialDataGSM(); }
-	if (printInSerial) { updateSerial(); }
 	delay(500);
 
 	//Enable the GPRS
 	mySerialGSM.println("AT+SAPBR=1,1");
 	// if (printInSerial) { ShowSerialDataGSM(); }
-	if (printInSerial) { updateSerial(); }
 	delay(3000);
 
 	//Query if the connection is setup properly, if we get back a IP address then we can proceed
 	mySerialGSM.println("AT+SAPBR=2,1");
 	// if (printInSerial) { ShowSerialDataGSM(); }
-	if (printInSerial) { updateSerial(); }
 	delay(500);
 
 	//We were allocated a IP address and now we can proceed by enabling the HTTP mode
 	mySerialGSM.println("AT+HTTPINIT");
 	// if (printInSerial) { ShowSerialDataGSM(); }
-	if (printInSerial) { updateSerial(); }
 	delay(500);
 	
 	//Start by setting up the HTTP bearer profile identifier
 	mySerialGSM.println("AT+HTTPPARA=\"CID\",1");
 	// if (printInSerial) { ShowSerialDataGSM(); }
-	if (printInSerial) { updateSerial(); }
 	delay(500);
 	
 	//Setting up the url to the 'thingspeak.com' address 
@@ -699,71 +643,16 @@ void Send2ThingSpeakGPRS() {
 	mySerialGSM.println(tempCall);
 	//mySerialGSM.println("AT+HTTPPARA=\"URL\",\"http://api.thingspeak.com/update?api_key=THINGSP_WR_APIKEY&field1=22&field2=15&field3=10\"");
 	// if (printInSerial) { ShowSerialDataGSM(); }
-	if (printInSerial) { updateSerial(); }
 	delay(500);
 	
 	//Start the HTTP GET session
 	mySerialGSM.println("AT+HTTPACTION=0");
 	// if (printInSerial) { ShowSerialDataGSM(); }
-	if (printInSerial) { updateSerial(); }
 	delay(500);
 	
 	//end of data sending
 	mySerialGSM.println("AT+HTTPREAD");
 	// if (printInSerial) { ShowSerialDataGSM(); }
-	if (printInSerial) { updateSerial(); }
 	delay(100);
 	digitalWrite(ESPLED, HIGH);
-}
-
-
-// // ~~~ Finding text possition ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// int find_text(String needle, String haystack) {
-//   int foundpos = -1;
-//   for (int i = 0; i <= haystack.length() - needle.length(); i++) {
-//     if (haystack.substring(i,needle.length()+i) == needle) {
-//       foundpos = i;
-//     }
-//   }
-//   return foundpos;
-// }
-
-// Serial print data
-void serialPrintAll() {
-  Serial.print("Temperature: ");
-  Serial.print(String(temperature));
-  Serial.println("°C");
-  Serial.print("Humidity: ");
-  Serial.print(String(humidity));
-  Serial.println("%");
-  Serial.print("Weight: ");
-  Serial.print(String(weight));
-  Serial.println(" kg");
-  Serial.println();
-}
-
-// ~~~ Print SW serial into HW ~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// void ShowSerialDataGSM() {
-//   while (mySerialGSM.available() != 0) {
-// 	Serial.write(mySerialGSM.read());
-// 	// int c = mySerialGSM.read();
-//     // Serial.write((char)c);
-//   }
-// }
-// void ShowSerialDataESP() {
-//   while (mySerialESP.available() != 0) {
-// 	Serial.write(mySerialESP.read());
-//   }
-// }
-void updateSerial() {
-	delay(500);
-	while (Serial.available()) {
-		mySerialGSM.write(Serial.read());
-	}
-	while(mySerialGSM.available()) {
-		Serial.write(mySerialGSM.read());
-	}
-	while(mySerialESP.available()) {
-		Serial.write(mySerialESP.read());
-	}
 }
