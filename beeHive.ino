@@ -74,7 +74,7 @@ char apiKey[] = THINGSP_WR_APIKEY;						// API key w/ write access
 
 int temperature = 0;
 int humidity = 0;
-int weight = 0;
+float weight = 0.0;
 
 unsigned int uploadInterval   = 0;
 unsigned long currentMillis   = 0;
@@ -289,8 +289,6 @@ void loop() {
 		mySerialESP.print(dataToESP);
 
 		cmd = "";
-		Serial.flush();
-		delay(100);
 	}
 
 	if (cmd.indexOf(smsReport) >= 0) {
@@ -298,8 +296,6 @@ void loop() {
 		SMS_command = 1000;
 
 		cmd = "";
-		Serial.flush();
-		delay(100);
 	}
 
 	if (cmd.indexOf(smsUploadCancel) >= 0) {
@@ -307,8 +303,6 @@ void loop() {
 		SMS_command = 0;
 
 		cmd = "";
-		Serial.flush();
-		delay(100);
 	}
 
 	if (cmd.indexOf(smsUpload30) >= 0) {
@@ -316,8 +310,6 @@ void loop() {
 		SMS_command = 30;
 
 		cmd = "";
-		Serial.flush();
-		delay(100);
 	}
 
 	if (cmd.indexOf(smsUpload45) >= 0) {
@@ -325,8 +317,6 @@ void loop() {
 		SMS_command = 45;
 
 		cmd = "";
-		Serial.flush();
-		delay(100);
 	}
 
 	if (cmd.indexOf(smsUpload90) >= 0) {
@@ -334,8 +324,6 @@ void loop() {
 		SMS_command = 90;
 
 		cmd = "";
-		Serial.flush();
-		delay(100);
 	}
 
 	if (cmd.indexOf(smsUpload120) >= 0) {
@@ -343,8 +331,6 @@ void loop() {
 		SMS_command = 120;
 
 		cmd = "";
-		Serial.flush();
-		delay(100);
 	}
 
 
@@ -390,7 +376,7 @@ void loop() {
 		// Reset uploadInterval if request was to upload once
 		uploadInterval = 0;
 
-		Serial.println("Uploading once (WiFi)...");
+		Serial.println("Uploading once (WiFi)...\r\n");
 
 		getMeasurements();
 		if (!gprsMode)	// Sending data using WiFi
@@ -407,7 +393,7 @@ void loop() {
 		} else
 		{
 			// Send2ThingSpeakGPRS();
-			Serial.println("Uploading once (GPRS) ...");
+			Serial.println("Uploading once (GPRS) ...\r\n");
 		}
 
 	}
@@ -416,7 +402,7 @@ void loop() {
 		(currentMillis - startMillisInte >= uploadInterval)
 	) {
 
-		Serial.println("Recurring upload (WiFi) ...");
+		Serial.println("Recurring upload (WiFi) ...\r\n");
 
 		getMeasurements();
 		if (!gprsMode)	// Sending data using WiFi
@@ -433,8 +419,10 @@ void loop() {
 		} else
 		{
 			// Send2ThingSpeakGPRS();
-			Serial.println("Recurring upload (GPRS) ...");
+			Serial.println("Recurring upload (GPRS) ...\r\n");
 		}
+
+		startMillisInte = currentMillis;
 	}
 
 
@@ -445,32 +433,6 @@ void loop() {
 		startMillisDeb = currentMillis;
 	}
 
-
-
-	// // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	// // TEMP STEP - DATA EVERY 30 sec
-	// //if (currentMillis % 30000 == 0) {
-	// if (currentMillis - startMillisTEMP >= 300000) {
-	// 	Serial.println("\r\n\r\nSending data to ESP ...");
-
-	// 	getMeasurements();
-
-	// 	dataToESP = String(temperature);
-	// 	dataToESP += "&";
-	// 	dataToESP += String(humidity);
-	// 	dataToESP += "&";
-	// 	dataToESP += String(weight);
-	// 	dataToESP += "\r\n";
-
-	// 	// Serial.println(dataToESP);
-	// 	mySerialESP.print(dataToESP);
-
-	// 	startMillisTEMP = currentMillis;
-	// }
-	// // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-	// inboundSerialESP = '\0';
-	// inboundSerialGSM = '\0';
 	// delay(1);
 }
 
@@ -484,8 +446,8 @@ void getMeasurements() {
 	delay(50);
 	humidity = dht.readHumidity();
 	delay(50);
-	// weight = fabs(scale.get_units(10));
-	weight = abs(scale.get_units(10));
+	weight = fabs(scale.get_units(10));
+	// weight = abs(scale.get_units(10));
 	delay(50);
 
 
@@ -600,7 +562,9 @@ void sendSMS() {
 	// }
 
 	// mySerialGSM.println("AT + CMGS = \"+306957969271\"");
-	mySerialGSM.println("AT + CMGS = \"+306974240700\"");
+	// mySerialGSM.println("AT + CMGS = \"+306974240700\"");
+	mySerialGSM.println("AT + CMGS = \"+306944553090\"");
+
 	delay(100);
 	// mySerialGSM.print("AT+CMGS=\"");
 	// // mySerialGSM.print(String(SMS_phone));
@@ -614,8 +578,7 @@ void sendSMS() {
 
 	// SMS content
 	// mySerialGSM.print(beeHiveMessage);
-	// mySerialGSM.print(dataToSMS);
-	mySerialGSM.println("Hey there");
+	mySerialGSM.print(dataToSMS);
 	delay(100);
 	// while(mySerialGSM.available()) {
 	// 	Serial.write(mySerialGSM.read());
@@ -623,13 +586,17 @@ void sendSMS() {
 
 	// Ctrl+Z character
 	// mySerialGSM.println((char)26);
-	mySerialGSM.write( 0x1a );
+	mySerialGSM.write("26");
+	// mySerialGSM.print("\x1A");
+	// mySerialGSM.println( 0x1a );
 	delay(100);
 	mySerialGSM.println();
 	delay(5000);
 
 	// delay(1000);
 	mySerialGSM.println(SIM900delAll);
+
+	Serial.println("SMS sent.");
 
 	digitalWrite(ESPLED, LOW);
 }
