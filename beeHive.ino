@@ -72,13 +72,14 @@
 const char* thingSpeakServer  = "api.thingspeak.com"; 	// 184.106.153.149
 char apiKey[] = THINGSP_WR_APIKEY;						// API key w/ write access
 
-float temperature = 0.0;
-float humidity = 0.0;
-float weight = 0.0;
+int temperature = 0;
+int humidity = 0;
+int weight = 0;
 
 unsigned int uploadInterval   = 0;
 unsigned long currentMillis   = 0;
 unsigned long startMillis	  = 0;
+unsigned long startMillisDeb  = 0;
 const unsigned int smsInterv  = 10000;
 const unsigned int seconds30  = 30000;
 const unsigned int seconds45  = 45000;
@@ -93,6 +94,7 @@ char SMS_datetime[24];
 char SMS_message[MESSAGE_LENGTH];	// Incoming SMS
 int messageIndex = 0;				// Defined in the readSMS() func
 
+bool allowSMS		= false;		// Debounce for SMS send
 bool gprsMode 		= false;		// True if no WiFi connection
 bool printInSerial 	= true;			// Printing in HW serial
 
@@ -185,6 +187,9 @@ void setup() {
 	mySerialGSM.end();
 	Serial.println(" done\n\r");
 	delay(100);
+
+	mySerialGSM.flush();
+	Serial.flush();
 }
 
 
@@ -261,7 +266,7 @@ void loop() {
 	}
 
 
-	if (inboundSerialGSM.indexOf('+CMT: "+306974240700",') > 0) {
+	if ((inboundSerialGSM.indexOf('+CMT: "+306974240700",') > 0) && allowSMS) {
 		Serial.println("User requested a report by SMS!\r\n");
 		// readSMS();
 		// getMeasurements();
@@ -270,29 +275,6 @@ void loop() {
 	// if (inboundSerialESP.indexOf('wifi') > 0) {
 	// 	Serial.println("ESP has WiFi!\r\n");
 	// }
-
-
-	// if (currentMillis % smsInterv == 0) {
-		//Serial.println("");
-		// SMS_command = readSMS();
-
-		//getMeasurements();
-
-		// SIM900checkNetReg  SIM900simInfo  SIM900checkSignal
-		// Serial.println("");
-		// mySerialGSM.println(SIM900simInfo);
-		// delay(1000);
-
-		// ShowSerialDataGSM();
-
-		// SMS_command = gprs.isSMSunread();
-
-		// Serial.print("SMS_command (return): ");
-		// Serial.println(SMS_command);
-		// Serial.println("");
-	// }
-
-	// SMS_command = -1;
 
 	switch (SMS_command) {
 		case -2:							// Invalid SMS content
@@ -328,23 +310,7 @@ void loop() {
 		break;
 	}
 
-	const unsigned long period = 30000;
-	//if (currentMillis % 30000 == 0) {
-	if (currentMillis - startMillis >= period) {
-		Serial.println("\r\n\r\nSending data to ESP ...");
-
-		getMeasurements();
-		
-		String dataToESP = String(temperature);
-		dataToESP += "&";
-		dataToESP += String(humidity);
-		dataToESP += "&";
-		dataToESP += String(weight);
-		dataToESP += "\r\n";
-
-		mySerialESP.print(dataToESP);
-		startMillis = currentMillis;
-	}
+	
 
 	if (
 		(uploadInterval != 0) && 
@@ -375,6 +341,36 @@ void loop() {
 		}
 	}
 
+
+	// Debounce every 1 sec
+	if (currentMillis - startMillisDeb >= 10000) {
+		allowSMS = true;
+		// Serial.println("Debounce reset");
+		startMillisDeb = currentMillis;
+	}
+
+	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	// TEMP STEP - DATA EVERY 30 sec
+	//if (currentMillis % 30000 == 0) {
+	if (currentMillis - startMillis >= 30000) {
+		Serial.println("\r\n\r\nSending data to ESP ...");
+
+		getMeasurements();
+		
+		String dataToESP = String(temperature);
+		dataToESP += "&";
+		dataToESP += String(humidity);
+		dataToESP += "&";
+		dataToESP += String(weight);
+		dataToESP += "\r\n";
+
+		Serial.println(dataToESP);
+
+		mySerialESP.print(dataToESP);
+		startMillis = currentMillis;
+	}
+	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 	// inboundSerialESP = '\0';
 	// inboundSerialGSM = '\0';
 	// delay(1);
@@ -385,9 +381,9 @@ void loop() {
 void getMeasurements() {
 	digitalWrite(PCBLED, HIGH);
 	// reset values
-	temperature = 0;
-	humidity = 0;
-	weight = 0;
+	// temperature = 0;
+	// humidity = 0;
+	// weight = 0;
 	beeHiveMessage = '\0';
 
 	// read values
@@ -395,7 +391,8 @@ void getMeasurements() {
 	delay(50);
 	humidity = dht.readHumidity();
 	delay(50);
-	weight = fabs(scale.get_units(10));
+	// weight = fabs(scale.get_units(10));
+	weight = abs(scale.get_units(10));
 	delay(50);
 
 
