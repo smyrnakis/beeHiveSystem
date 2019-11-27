@@ -1,5 +1,6 @@
-#include <SoftwareSerial.h>
+// http://beehivesystem.ddns.net
 
+#include <SoftwareSerial.h>
 #include <GPRS_Shield_Arduino.h>
 #include <sim900.h>
 #include <HX711.h>
@@ -95,6 +96,9 @@ char SMS_datetime[24];
 char SMS_message[MESSAGE_LENGTH];	// Incoming SMS
 int messageIndex = 0;				// Defined in the readSMS() func
 
+String phone_tolis = TOLIS_MOBILE;
+String phone_nick = NICK_MOBILE;
+
 bool allowSMS		= false;		// Debounce for SMS send
 bool gprsMode 		= false;		// True if no WiFi connection
 bool printInSerial 	= true;			// Printing in HW serial
@@ -158,12 +162,6 @@ void setup() {
 		Serial.println(" failed\n\r");
 	}
 	delay(100);
-
-	// Serial.print("Initialising Software Serials ...");
-	// mySerialGSM.begin(BAUDRATE);
-	// mySerialESP.begin(BAUDRATE);
-	// Serial.println(" done\n\r");
-	// delay(100);
 
 	Serial.print("Initialising DHT ...");
 	dht.begin();
@@ -267,8 +265,8 @@ void loop() {
 	}
 
 
-	if ((inboundSerialGSM.indexOf("+3069XXXXXXXX") >= 0) || 
-	    (inboundSerialGSM.indexOf("+3069XXXXXXXX") >= 0)) {
+	if ((inboundSerialGSM.indexOf(phone_tolis) >= 0) || 
+	    (inboundSerialGSM.indexOf(phone_nick) >= 0)) {
 		Serial.println("User requested a report by SMS!\r\n");
 		SMS_command = readSMS();
 	}
@@ -563,15 +561,16 @@ void sendSMS() {
 
 	// mySerialGSM.println("AT + CMGS = \"+3069XXXXXXXX\"");
 	// mySerialGSM.println("AT + CMGS = \"+3069XXXXXXXX\"");
-	mySerialGSM.println("AT + CMGS = \"+3069XXXXXXXX\"");
+	// mySerialGSM.println("AT + CMGS = \"+3069XXXXXXXX\"");
 
-	delay(100);
-	// mySerialGSM.print("AT+CMGS=\"");
-	// // mySerialGSM.print(String(SMS_phone));
-	// // mySerialGSM.print("+3069XXXXXXXX");
-	// mySerialGSM.print("+3069XXXXXXXX");
-	// mySerialGSM.println("\"");
+	mySerialGSM.print("AT+CMGS=\"");
+	// mySerialGSM.print(String(SMS_phone));
+	// mySerialGSM.print(phone_tolis);
+	mySerialGSM.print(phone_tolis);
+	mySerialGSM.println("\"");
 	// mySerialGSM.println("AT+CMGS=\"+3069XXXXXXXX\"");
+	delay(100);
+	
 	// while(mySerialGSM.available()) {
 	// 	Serial.write(mySerialGSM.read());
 	// }
